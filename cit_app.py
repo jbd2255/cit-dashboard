@@ -58,6 +58,12 @@ def _gdrive_download(file_id: str, label: str, usecols: list = None) -> pd.DataF
     content = b"".join(chunks)
     print(f"[DOL] {label}: {len(content)/1024/1024:.1f} MB downloaded", flush=True)
 
+    # Check for Google Drive error pages (quota exceeded, etc.)
+    sample = content[:500].decode("utf-8", errors="ignore").lower()
+    if "<!doctype" in sample or "<html" in sample:
+        del content
+        raise RuntimeError(f"{label}: Google Drive returned HTML instead of CSV (quota exceeded or file not accessible). Re-upload the file to get a fresh download quota.")
+
     # usecols with case-insensitive matching (CSV headers may have mixed case)
     if usecols:
         needed = {c.upper() for c in usecols}
