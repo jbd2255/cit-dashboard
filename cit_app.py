@@ -107,7 +107,7 @@ def _load_dol_data():
     try:
         url_5500 = DATA_URL_5500 or f"{GITHUB_RELEASE}/F_5500_2023_Latest.csv"
         url_sc   = DATA_URL_SCHED_C or f"{GITHUB_RELEASE}/F_SCH_C_PART1_ITEM2_2023_Latest.csv"
-        url_sh   = DATA_URL_SCHED_H or f"{GITHUB_RELEASE}/F_SCH_H_2023_Latest.csv"
+        url_sh   = DATA_URL_SCHED_H or f"{GITHUB_RELEASE}/F_SCH_H_2023_latest.csv"
 
         # ── F_5500 (only load columns we need -8 vs 140 saves ~95% RAM) ──
         F5500_COLS = [
