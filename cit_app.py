@@ -58,7 +58,13 @@ def _gdrive_download(file_id: str, label: str, usecols: list = None) -> pd.DataF
     content = b"".join(chunks)
     print(f"[DOL] {label}: {len(content)/1024/1024:.1f} MB downloaded", flush=True)
 
-    df = pd.read_csv(io.BytesIO(content), low_memory=False, dtype=str, usecols=usecols)
+    # usecols with case-insensitive matching (CSV headers may have mixed case)
+    if usecols:
+        needed = {c.upper() for c in usecols}
+        col_filter = lambda c: c.strip().upper() in needed
+    else:
+        col_filter = None
+    df = pd.read_csv(io.BytesIO(content), low_memory=False, dtype=str, usecols=col_filter)
     del content  # free memory immediately
     df.columns = [c.strip().upper() for c in df.columns]
     print(f"[DOL] {label}: {len(df):,} rows x {len(df.columns)} cols", flush=True)
