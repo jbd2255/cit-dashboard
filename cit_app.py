@@ -26,26 +26,29 @@ _data = {
     "sched_c_count": 0,
 }
 
-# Google Drive file IDs -set via Railway environment variables (or .env locally)
-GDRIVE_5500_ID    = os.environ.get("GDRIVE_5500_ID", "")
-GDRIVE_SCHED_C_ID = os.environ.get("GDRIVE_SCHED_C_ID", "")
-GDRIVE_SCHED_H_ID = os.environ.get("GDRIVE_SCHED_H_ID", "")
+# Data file URLs -set via Railway environment variables
+# Supports direct URLs (GitHub releases, Dropbox, etc.) or Google Drive file IDs
+DATA_URL_5500    = os.environ.get("DATA_URL_5500", "")
+DATA_URL_SCHED_C = os.environ.get("DATA_URL_SCHED_C", "")
+DATA_URL_SCHED_H = os.environ.get("DATA_URL_SCHED_H", "")
+
+# GitHub release base URL (default if individual URLs not set)
+GITHUB_RELEASE = "https://github.com/jbd2255/cit-dashboard/releases/download/v0.1"
 
 
 # ---------------------------------------------------------------------------
-# Google Drive download helper
+# CSV download helper (supports direct URLs and Google Drive IDs)
 # ---------------------------------------------------------------------------
-def _gdrive_download(file_id: str, label: str, usecols: list = None) -> pd.DataFrame:
-    """Download a public Google Drive CSV and return a DataFrame."""
-    session = requests.Session()
-
-    # Use the newer usercontent endpoint -bypasses virus-scan confirmation page
-    url = "https://drive.usercontent.google.com/download"
-    params = {"id": file_id, "export": "download", "confirm": "t"}
+def _download_csv(url_or_id: str, label: str, usecols: list = None) -> pd.DataFrame:
+    """Download a CSV from a URL and return a DataFrame."""
+    # If it looks like a Google Drive file ID (no slashes), build the Drive URL
+    if url_or_id and "/" not in url_or_id:
+        url = f"https://drive.usercontent.google.com/download?id={url_or_id}&export=download&confirm=t"
+    else:
+        url = url_or_id
 
     print(f"[DOL] Downloading {label} ...", flush=True)
-    resp = session.get(url, params=params, timeout=600, stream=True)
-
+    resp = requests.get(url, timeout=600, stream=True)
     resp.raise_for_status()
 
     chunks, total = [], 0
@@ -58,11 +61,11 @@ def _gdrive_download(file_id: str, label: str, usecols: list = None) -> pd.DataF
     content = b"".join(chunks)
     print(f"[DOL] {label}: {len(content)/1024/1024:.1f} MB downloaded", flush=True)
 
-    # Check for Google Drive error pages (quota exceeded, etc.)
+    # Check for error pages (HTML instead of CSV)
     sample = content[:500].decode("utf-8", errors="ignore").lower()
     if "<!doctype" in sample or "<html" in sample:
         del content
-        raise RuntimeError(f"{label}: Google Drive returned HTML instead of CSV (quota exceeded or file not accessible). Re-upload the file to get a fresh download quota.")
+        raise RuntimeError(f"{label}: Got HTML instead of CSV. Check the download URL or quota.")
 
     # usecols with case-insensitive matching (CSV headers may have mixed case)
     if usecols:
@@ -102,18 +105,17 @@ def _load_dol_data():
         _data["error"] = None
 
     try:
-        if not GDRIVE_5500_ID or not GDRIVE_SCHED_C_ID:
-            raise RuntimeError(
-                "GDRIVE_5500_ID and GDRIVE_SCHED_C_ID environment variables are not set."
-            )
+        url_5500 = DATA_URL_5500 or f"{GITHUB_RELEASE}/F_5500_2023_Latest.csv"
+        url_sc   = DATA_URL_SCHED_C or f"{GITHUB_RELEASE}/F_SCH_C_PART1_ITEM2_2023_Latest.csv"
+        url_sh   = DATA_URL_SCHED_H or f"{GITHUB_RELEASE}/F_SCH_H_2023_Latest.csv"
 
-        # ── F_5500 (only load columns we need — 8 vs 140 saves ~95% RAM) ──
+        # ── F_5500 (only load columns we need -8 vs 140 saves ~95% RAM) ──
         F5500_COLS = [
             "ACK_ID", "TYPE_DFE_PLAN_ENTITY_CD", "PLAN_NAME",
             "SPONSOR_DFE_NAME", "SPONS_DFE_EIN", "ADMIN_NAME",
             "ADMIN_NAME_SAME_SPON_IND", "FORM_TAX_PRD",
         ]
-        df5 = _gdrive_download(GDRIVE_5500_ID, "F_5500_2023", usecols=F5500_COLS)
+        df5 = _download_csv(url_5500, "F_5500_2023", usecols=F5500_COLS)
 
         dfe_col = _find_col(df5, ["TYPE_DFE_PLAN_ENTITY_CD"])
         if dfe_col:
@@ -131,7 +133,7 @@ def _load_dol_data():
             "ACK_ID", "PROVIDER_OTHER_NAME", "PROVIDER_OTHER_SRVC_CODES",
             "PROVIDER_OTHER_DIRECT_COMP_AMT", "PROV_OTHER_TOT_IND_COMP_AMT",
         ]
-        df_c = _gdrive_download(GDRIVE_SCHED_C_ID, "F_SCH_C_PART1_ITEM2_2023", usecols=SCH_C_COLS)
+        df_c = _download_csv(url_sc, "F_SCH_C_PART1_ITEM2_2023", usecols=SCH_C_COLS)
 
         ack_col_5500 = _find_col(cit_df, ["ACK_ID"])
         ack_col_c    = _find_col(df_c,   ["ACK_ID"])
@@ -145,7 +147,7 @@ def _load_dol_data():
 
         # ── F_SCH_H (accountant, custodian, fees) ─────────────────────────
         sch_h_lookup = {}  # ACK_ID -> dict of accountant, custodian, fees
-        if GDRIVE_SCHED_H_ID:
+        if url_sh:
             try:
                 SCH_H_COLS = [
                     "ACK_ID", "ACCOUNTANT_FIRM_NAME", "FDCRY_TRUSTEE_CUST_NAME",
@@ -154,7 +156,7 @@ def _load_dol_data():
                     "IQPA_AUDIT_FEES_AMT", "TOT_ADMIN_EXPENSES_AMT",
                     "TOT_EXPENSES_AMT", "NET_ASSETS_EOY_AMT",
                 ]
-                df_h = _gdrive_download(GDRIVE_SCHED_H_ID, "F_SCH_H_2023", usecols=SCH_H_COLS)
+                df_h = _download_csv(url_sh, "F_SCH_H_2023", usecols=SCH_H_COLS)
                 ack_col_h = _find_col(df_h, ["ACK_ID"])
 
                 acct_col    = _find_col(df_h, ["ACCOUNTANT_FIRM_NAME"])
@@ -232,10 +234,8 @@ def _load_dol_data():
 
 
 def _start_load():
-    if GDRIVE_5500_ID and GDRIVE_SCHED_C_ID:
-        threading.Thread(target=_load_dol_data, daemon=True).start()
-    else:
-        print("[DOL] Skipping data load -- env vars not set.", flush=True)
+    # Always load — defaults to GitHub release URLs if env vars not set
+    threading.Thread(target=_load_dol_data, daemon=True).start()
 
 
 _start_load()
