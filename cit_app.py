@@ -109,9 +109,15 @@ def _load_dol_data():
         ]
         df5 = _gdrive_download(GDRIVE_5500_ID, "F_5500_2023", usecols=F5500_COLS)
 
-        cit_df = df5[df5["TYPE_DFE_PLAN_ENTITY_CD"].str.strip() == "C"].copy()
+        dfe_col = _find_col(df5, ["TYPE_DFE_PLAN_ENTITY_CD"])
+        if dfe_col:
+            cit_df = df5[df5[dfe_col].str.strip() == "C"].copy()
+            cit_df = cit_df.drop(columns=[dfe_col])
+        else:
+            print(f"[DOL] WARNING: DFE type column not found. Cols: {list(df5.columns)}", flush=True)
+            cit_df = df5.copy()
         print(f"[DOL] CIT rows after filter: {len(cit_df):,}", flush=True)
-        cit_df = cit_df.drop(columns=["TYPE_DFE_PLAN_ENTITY_CD"]).reset_index(drop=True)
+        cit_df = cit_df.reset_index(drop=True)
         del df5
 
         # ── F_SCH_C_PART1_ITEM2 ──────────────────────────────────────────
