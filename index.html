@@ -267,10 +267,18 @@
   /* ── Table ───────────────────────────────────────────────── */
   .table-wrap {
     overflow-x: auto;
+    overflow-y: auto;
+    max-height: 55vh;
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
     background: var(--surface);
     box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+  }
+
+  .table-wrap thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
   }
 
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
@@ -337,20 +345,91 @@
     font-size: 14px;
   }
 
-  #dol-results    { display: none; }
-  #edgar-results  { display: none; }
+  #dol-results { display: none; }
+
+  /* ── Summary tab styles ──────────────────────────────────── */
+  .summary-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    margin-top: 1rem;
+  }
+
+  @media (max-width: 900px) { .summary-grid { grid-template-columns: 1fr; } }
+
+  .summary-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+  }
+
+  .summary-card h3 {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: 12px 16px;
+    background: #f0ede6;
+    border-bottom: 1px solid var(--border);
+    margin: 0;
+  }
+
+  .summary-card table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .summary-card td { padding: 7px 16px; border-bottom: 1px solid var(--border); }
+  .summary-card tr:last-child td { border-bottom: none; }
+  .summary-card tr:hover td { background: #faf9f6; }
+  .summary-card .rank { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--muted); width: 30px; }
+  .summary-card .entity { font-weight: 500; }
+  .summary-card .num { font-family: 'IBM Plex Mono', monospace; font-size: 12px; text-align: right; white-space: nowrap; }
+  .summary-card .cnt { font-family: 'IBM Plex Mono', monospace; font-size: 11px; text-align: center; color: var(--muted); width: 60px; }
+
+  .kpi-row {
+    display: flex;
+    gap: 1.25rem;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+  }
+
+  .kpi {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 1rem 1.5rem;
+    flex: 1;
+    min-width: 180px;
+  }
+
+  .kpi-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+
+  .kpi-value {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 22px;
+    font-weight: 500;
+    color: var(--text);
+  }
 </style>
 </head>
 <body>
 
 <header>
   <h1>CIT Service Provider Dashboard</h1>
-  <span>DOL Form 5500 · SEC EDGAR N-CEN</span>
+  <span>DOL Form 5500 · CIT Intelligence</span>
 </header>
 
 <div class="tab-bar">
-  <button class="tab-btn active" onclick="switchTab('dol')">DOL Form 5500 CIT</button>
-  <button class="tab-btn"        onclick="switchTab('edgar')">SEC EDGAR N-CEN</button>
+  <button class="tab-btn"        onclick="switchTab('dol')">Search</button>
+  <button class="tab-btn active" onclick="switchTab('summary')">Market Summary</button>
 </div>
 
 <div class="main">
@@ -358,7 +437,7 @@
   <!-- ══════════════════════════════════════════════════════════
        TAB 1 · DOL Form 5500 CIT
        ══════════════════════════════════════════════════════════ -->
-  <div id="tab-dol" class="tab-panel active">
+  <div id="tab-dol" class="tab-panel">
 
     <div class="data-banner idle" id="dol-banner">
       Checking data status...
@@ -383,9 +462,7 @@
         <select id="dol-role">
           <option value="">All roles</option>
           <option value="trustee">Trustee</option>
-          <option value="custodian">Custodian</option>
           <option value="administrator">Administrator</option>
-          <option value="accountant">Accountant</option>
         </select>
         <button id="dol-btn" onclick="runDolSearch()">Search DOL Data</button>
       </div>
@@ -410,9 +487,7 @@
       </div>
       <div class="legend" id="dol-legend-plan">
         <div class="legend-item"><div class="legend-dot" style="background:#9fd3d3"></div>Trustee</div>
-        <div class="legend-item"><div class="legend-dot" style="background:#c2d4e8"></div>Custodian</div>
         <div class="legend-item"><div class="legend-dot" style="background:#b3d9c7"></div>Administrator</div>
-        <div class="legend-item"><div class="legend-dot" style="background:#ccc2e8"></div>Accountant</div>
       </div>
       <div class="legend" id="dol-legend-provider" style="display:none">
         <div class="legend-item"><div class="legend-dot" style="background:#f5d6a0"></div>Fee paid (direct + indirect)</div>
@@ -428,60 +503,17 @@
   </div><!-- /tab-dol -->
 
   <!-- ══════════════════════════════════════════════════════════
-       TAB 2 · SEC EDGAR N-CEN
+       TAB 2 · Market Summary
        ══════════════════════════════════════════════════════════ -->
-  <div id="tab-edgar" class="tab-panel">
+  <div id="tab-summary" class="tab-panel active">
 
-    <div class="search-card">
-      <div class="search-label">Investment manager</div>
-      <div class="search-row">
-        <input type="text" id="edgar-q" placeholder="e.g. Vanguard, BlackRock, Fidelity, T. Rowe Price"/>
-        <button id="edgar-btn" onclick="runEdgarSearch()">Search EDGAR</button>
-      </div>
-      <div class="hint">
-        Try:
-        <span onclick="setEdgarQ('Vanguard')">Vanguard</span>
-        <span onclick="setEdgarQ('BlackRock')">BlackRock</span>
-        <span onclick="setEdgarQ('Fidelity')">Fidelity</span>
-        <span onclick="setEdgarQ('T. Rowe Price')">T. Rowe Price</span>
-        <span onclick="setEdgarQ('Invesco')">Invesco</span>
-      </div>
-    </div>
+    <div class="data-banner idle" id="summary-banner">Loading summary...</div>
 
-    <div class="status-bar" id="edgar-status"></div>
-    <div class="error-box"  id="edgar-err"></div>
+    <div class="kpi-row" id="summary-kpis"></div>
 
-    <div id="edgar-results">
-      <div class="results-header">
-        <span class="results-title" id="edgar-rtitle"></span>
-        <span class="count-badge"   id="edgar-rcount"></span>
-      </div>
-      <div class="legend">
-        <div class="legend-item"><div class="legend-dot" style="background:#c2d4e8"></div>Custodian</div>
-        <div class="legend-item"><div class="legend-dot" style="background:#b3d9c7"></div>Administrator</div>
-        <div class="legend-item"><div class="legend-dot" style="background:#f5d6a0"></div>Transfer agent</div>
-        <div class="legend-item"><div class="legend-dot" style="background:#ccc2e8"></div>Accountant</div>
-      </div>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Fund name</th>
-              <th>CIK</th>
-              <th>Filing date</th>
-              <th>Custodian(s)</th>
-              <th>Administrator</th>
-              <th>Transfer agent</th>
-              <th>Accountant</th>
-              <th>Filing</th>
-            </tr>
-          </thead>
-          <tbody id="edgar-tbody"></tbody>
-        </table>
-      </div>
-    </div>
+    <div class="summary-grid" id="summary-grid"></div>
 
-  </div><!-- /tab-edgar -->
+  </div><!-- /tab-summary -->
 
 </div><!-- /main -->
 
@@ -508,11 +540,12 @@ function pills(arr, cls) {
 // ── Tab switching ──────────────────────────────────────────────────────────
 function switchTab(name) {
   document.querySelectorAll('.tab-btn').forEach((b, i) => {
-    b.classList.toggle('active', (i === 0 && name === 'dol') || (i === 1 && name === 'edgar'));
+    b.classList.toggle('active', (i === 0 && name === 'dol') || (i === 1 && name === 'summary'));
   });
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   $('tab-' + name).classList.add('active');
   if (name === 'dol') refreshDolBanner();
+  if (name === 'summary') loadSummary();
 }
 
 // ── DOL data status banner ─────────────────────────────────────────────────
@@ -555,7 +588,7 @@ async function refreshDolBanner() {
   }
 }
 
-// Poll immediately on page load
+// Poll data status on page load
 refreshDolBanner();
 
 // ── DOL search ─────────────────────────────────────────────────────────────
@@ -640,26 +673,41 @@ function renderDolPlanTable(q, data) {
   $('dol-thead').innerHTML = `<tr>
     <th>Plan name</th>
     <th>Sponsor / DFE</th>
-    <th>EIN</th>
     <th>Year</th>
-    <th>Trustee(s)</th>
-    <th>Custodian(s)</th>
-    <th>Administrator(s)</th>
-    <th>Accountant(s)</th>
-    <th style="text-align:right">Total fees</th>
+    <th>Trustee</th>
+    <th>Administrator</th>
+    <th style="text-align:right">Trustee fees</th>
+    <th style="text-align:right">Invst mgmt</th>
+    <th style="text-align:right">Admin fees</th>
+    <th style="text-align:right">Total expenses</th>
+    <th style="text-align:right">Net assets</th>
   </tr>`;
 
-  $('dol-tbody').innerHTML = data.results.map(r => `
+  const t = data.totals || {};
+  const totalsRow = `
+    <tr style="background:#f0ede6;font-weight:600;border-bottom:2px solid var(--border-strong)">
+      <td colspan="5" style="font-family:'IBM Plex Mono',monospace;font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted)">
+        Totals (${data.results.length} filings)
+      </td>
+      <td class="fee-cell" style="font-weight:600">${fmt$(t.trustee_fees)}</td>
+      <td class="fee-cell" style="font-weight:600">${fmt$(t.invst_mgmt_fees)}</td>
+      <td class="fee-cell" style="font-weight:600">${fmt$(t.admin_fees)}</td>
+      <td class="fee-cell" style="font-weight:600">${fmt$(t.total_expenses)}</td>
+      <td class="fee-cell" style="font-weight:600">${fmt$(t.net_assets)}</td>
+    </tr>`;
+
+  $('dol-tbody').innerHTML = totalsRow + data.results.map(r => `
     <tr>
       <td class="fund-name">${r.plan_name || '—'}</td>
       <td style="max-width:200px;line-height:1.4">${r.sponsor_name || '—'}</td>
-      <td class="mono-cell">${r.ein || '—'}</td>
       <td class="mono-cell">${r.year ? r.year.slice(0, 4) : '—'}</td>
       <td>${pills(r.trustees,      'pill-tr')}</td>
-      <td>${pills(r.custodians,    'pill-c')}</td>
       <td>${pills(r.administrators,'pill-a')}</td>
-      <td>${pills(r.accountants,   'pill-ac')}</td>
-      <td class="fee-cell">${fmt$(r.total_fees)}</td>
+      <td class="fee-cell">${fmt$(r.trustee_fees)}</td>
+      <td class="fee-cell">${fmt$(r.invst_mgmt_fees)}</td>
+      <td class="fee-cell">${fmt$(r.admin_fees)}</td>
+      <td class="fee-cell">${fmt$(r.total_expenses)}</td>
+      <td class="fee-cell">${fmt$(r.net_assets)}</td>
     </tr>
   `).join('');
 
@@ -691,79 +739,94 @@ function renderDolProviderTable(q, data) {
   $('dol-results').style.display = 'block';
 }
 
-// ── EDGAR search ───────────────────────────────────────────────────────────
-function setEdgarQ(v) { $('edgar-q').value = v; $('edgar-q').focus(); }
+// ── Summary tab ────────────────────────────────────────────────────────────
+let _summaryLoaded = false;
 
-$('edgar-q').addEventListener('keydown', e => { if (e.key === 'Enter') runEdgarSearch(); });
-
-function setEdgarStatus(msg, spin) {
-  $('edgar-status').innerHTML = spin
-    ? `<div class="spinner"></div><span>${msg}</span>`
-    : `<span>${msg}</span>`;
-}
-
-function showEdgarErr(msg) { $('edgar-err').textContent = msg; $('edgar-err').style.display = 'block'; }
-function hideEdgarErr()    { $('edgar-err').style.display = 'none'; }
-
-async function runEdgarSearch() {
-  const q = $('edgar-q').value.trim();
-  if (!q) return;
-  hideEdgarErr();
-  $('edgar-results').style.display = 'none';
-  $('edgar-tbody').innerHTML = '';
-  $('edgar-btn').disabled = true;
-  setEdgarStatus('Searching SEC EDGAR for N-CEN filings…', true);
+async function loadSummary() {
+  if (_summaryLoaded) return;
+  const banner = $('summary-banner');
+  banner.className = 'data-banner loading';
+  banner.innerHTML = '<span class="spinner" style="border-top-color:var(--accent)"></span> Loading market summary...';
 
   try {
-    const res  = await fetch(`${API}/search?q=${encodeURIComponent(q)}`);
+    const res  = await fetch(`${API}/api/summary`);
     const data = await res.json();
 
     if (data.error) {
-      setEdgarStatus('');
-      showEdgarErr(data.error);
-      $('edgar-btn').disabled = false;
+      banner.className = 'data-banner error';
+      banner.textContent = data.error;
       return;
     }
-    if (!data.results?.length) {
-      setEdgarStatus('No N-CEN filings found for that manager name. Try a variation.');
-      $('edgar-btn').disabled = false;
-      return;
-    }
-    renderEdgarTable(q, data.results);
-    setEdgarStatus(
-      `Showing ${data.results.length} fund${data.results.length !== 1 ? 's' : ''} · SEC EDGAR N-CEN`
-    );
+
+    _summaryLoaded = true;
+    banner.className = 'data-banner ok';
+    banner.textContent = `${data.filing_count.toLocaleString()} CIT filings · DOL Form 5500 2023 data`;
+
+    // KPIs
+    $('summary-kpis').innerHTML = `
+      <div class="kpi">
+        <div class="kpi-label">Total CIT filings</div>
+        <div class="kpi-value">${data.filing_count.toLocaleString()}</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Total net assets</div>
+        <div class="kpi-value">${fmt$(data.total_net_assets)}</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Total expenses</div>
+        <div class="kpi-value">${fmt$(data.total_expenses)}</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Avg expense ratio</div>
+        <div class="kpi-value">${data.total_net_assets > 0
+          ? (data.total_expenses / data.total_net_assets * 100).toFixed(3) + '%'
+          : '—'}</div>
+      </div>
+    `;
+
+    // Ranking tables
+    $('summary-grid').innerHTML =
+      renderRankCard('Top Trustees by Net Assets', data.top_trustees) +
+      renderRankCard('Top Administrators by Net Assets', data.top_administrators);
+
   } catch (e) {
-    setEdgarStatus('');
-    showEdgarErr('Could not reach the server. (' + e.message + ')');
+    banner.className = 'data-banner error';
+    banner.textContent = 'Error: ' + e.message;
   }
-  $('edgar-btn').disabled = false;
 }
 
-function renderEdgarTable(q, rows) {
-  $('edgar-rtitle').textContent = `N-CEN results for "${q}"`;
-  $('edgar-rcount').textContent = rows.length + ' fund' + (rows.length !== 1 ? 's' : '');
-
-  $('edgar-tbody').innerHTML = rows.map(r => `
+function renderRankCard(title, items) {
+  if (!items?.length) return '';
+  const rows = items.map((r, i) => `
     <tr>
-      <td class="fund-name">${r.name || '—'}</td>
-      <td class="mono-cell">${r.cik || '—'}</td>
-      <td class="mono-cell">${r.filingDate || '—'}</td>
-      <td>${pills(r.custodians,  'pill-c')}</td>
-      <td>${pills(r.admins,      'pill-a')}</td>
-      <td>${pills(r.tas,         'pill-t')}</td>
-      <td>${pills(r.accountants, 'pill-ac')}</td>
-      <td>${r.edgarUrl
-        ? `<a class="edgar-link" href="${r.edgarUrl}" target="_blank">EDGAR ↗</a>`
-        : '<span class="dash">—</span>'}</td>
+      <td class="rank">${i + 1}</td>
+      <td class="entity">${r.name}</td>
+      <td class="cnt">${r.count}</td>
+      <td class="num">${fmt$(r.net_assets)}</td>
+      <td class="num">${fmt$(r.total_expenses)}</td>
     </tr>
   `).join('');
 
-  $('edgar-results').style.display = 'block';
+  return `
+    <div class="summary-card">
+      <h3>${title}</h3>
+      <table>
+        <thead><tr>
+          <th style="width:30px">#</th>
+          <th>Name</th>
+          <th style="text-align:center;width:60px">Funds</th>
+          <th style="text-align:right">Net assets</th>
+          <th style="text-align:right">Expenses</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
 }
 
 // Initialise role selector visibility
 updateDolLabel();
+loadSummary();
 </script>
 </body>
 </html>

@@ -26,9 +26,10 @@ _data = {
     "sched_c_count": 0,
 }
 
-# Google Drive file IDs — set via Railway environment variables (or .env locally)
+# Google Drive file IDs -set via Railway environment variables (or .env locally)
 GDRIVE_5500_ID    = os.environ.get("GDRIVE_5500_ID", "")
 GDRIVE_SCHED_C_ID = os.environ.get("GDRIVE_SCHED_C_ID", "")
+GDRIVE_SCHED_H_ID = os.environ.get("GDRIVE_SCHED_H_ID", "")
 
 
 # ---------------------------------------------------------------------------
@@ -37,25 +38,13 @@ GDRIVE_SCHED_C_ID = os.environ.get("GDRIVE_SCHED_C_ID", "")
 def _gdrive_download(file_id: str, label: str) -> pd.DataFrame:
     """Download a public Google Drive CSV and return a DataFrame."""
     session = requests.Session()
-    url = "https://drive.google.com/uc"
-    params = {"export": "download", "id": file_id}
+
+    # Use the newer usercontent endpoint -bypasses virus-scan confirmation page
+    url = "https://drive.usercontent.google.com/download"
+    params = {"id": file_id, "export": "download", "confirm": "t"}
 
     print(f"[DOL] Downloading {label} ...", flush=True)
-    resp = session.get(url, params=params, timeout=300, stream=True)
-
-    # Large files trigger a warning page — extract confirmation token
-    if "text/html" in resp.headers.get("Content-Type", ""):
-        token = None
-        for k, v in resp.cookies.items():
-            if "download_warning" in k:
-                token = v
-                break
-        if not token:
-            m = re.search(r'confirm=([^&"\'>\s]+)', resp.text)
-            if m:
-                token = m.group(1)
-        params["confirm"] = token or "t"
-        resp = session.get(url, params=params, timeout=300, stream=True)
+    resp = session.get(url, params=params, timeout=600, stream=True)
 
     resp.raise_for_status()
 
@@ -70,7 +59,8 @@ def _gdrive_download(file_id: str, label: str) -> pd.DataFrame:
 
     df = pd.read_csv(io.BytesIO(content), low_memory=False, dtype=str)
     df.columns = [c.strip().upper() for c in df.columns]
-    print(f"[DOL] {label}: {len(df):,} rows × {len(df.columns)} cols", flush=True)
+    print(f"[DOL] {label}: {len(df):,} rows x {len(df.columns)} cols", flush=True)
+    print(f"[DOL] {label} columns: {list(df.columns)}", flush=True)
     return df
 
 
@@ -107,21 +97,29 @@ def _load_dol_data():
         # ── F_5500 ────────────────────────────────────────────────────────
         df5 = _gdrive_download(GDRIVE_5500_ID, "F_5500_2023")
 
-        type_col = _find_col(df5, ["TYPE_PLAN_ENTITY_CD", "TYPE_PLAN_ENTITY", "ENTITY_CD", "ENTITY_TYPE"])
-        if type_col:
+        # CITs are DFEs (Direct Filing Entities) — filter on TYPE_DFE_PLAN_ENTITY_CD
+        dfe_col  = _find_col(df5, ["TYPE_DFE_PLAN_ENTITY_CD"])
+        type_col = _find_col(df5, ["TYPE_PLAN_ENTITY_CD"])
+
+        if dfe_col:
+            cit_df = df5[df5[dfe_col].str.strip() == "C"].copy()
+        elif type_col:
             cit_df = df5[df5[type_col].str.strip() == "C"].copy()
-            print(f"[DOL] CIT rows after filter: {len(cit_df):,}", flush=True)
         else:
-            print(f"[DOL] WARNING: entity-type column not found. Columns: {list(df5.columns[:30])}", flush=True)
+            print(f"[DOL] WARNING: entity-type column not found.", flush=True)
             cit_df = df5.copy()
+
+        print(f"[DOL] CIT rows after filter: {len(cit_df):,}", flush=True)
 
         # Keep only the columns we actually use to reduce RAM
         keep_5500 = []
         for candidates in [
             ["ACK_ID"],
             ["PLAN_NAME", "PLAN_NAME_DFE", "NAME_OF_PLAN"],
-            ["SPONS_DFE_NAME", "SPONS_NAME", "SPONSOR_NAME", "DFE_NAME"],
+            ["SPONSOR_DFE_NAME", "SPONS_DFE_NAME", "SPONS_NAME", "DFE_NAME"],
             ["SPONS_DFE_EIN", "PLAN_EIN", "EIN"],
+            ["ADMIN_NAME"],
+            ["ADMIN_NAME_SAME_SPON_IND"],
             ["FORM_TAX_PRD", "TAX_PRD", "PLAN_YEAR_END", "YEAR"],
             ["FORM_PLAN_YEAR_BEGIN_DATE", "PLAN_YEAR_BEGIN"],
         ]:
@@ -143,49 +141,79 @@ def _load_dol_data():
             df_c = df_c[df_c[ack_col_c].str.strip().isin(cit_ids)].copy()
             print(f"[DOL] Schedule C rows for CITs: {len(df_c):,}", flush=True)
 
-        # Keep useful Schedule C columns
-        keep_c = []
-        for candidates in [
-            ["ACK_ID"],
-            [
-                "SCH_C_PART_I_IT_2_NM", "PART_I_ITEM2A_NM", "PART_1_ITEM2_NM",
-                "SERV_PROV_NAME", "SP_NAME", "NAME", "PROVIDER_NAME",
-                "SCH_C_PT1_IT2_NM", "PT1_IT2_NM",
-            ],
-            [
-                "SCH_C_PART_I_IT_2_EIN", "PART_I_ITEM2A_EIN", "PART_1_ITEM2_EIN",
-                "SERV_PROV_EIN", "SP_EIN",
-            ],
-            [
-                "SCH_C_PART_I_IT_2_SERV_CD", "PART_I_ITEM2B_SERVICE_CD", "PART_1_ITEM2_SERV_CD",
-                "SERV_CD", "SERVICE_CD", "SERVICE_CODE", "SVC_CD",
-            ],
-            [
-                "SCH_C_PART_I_IT_2_TOT_COMP_AMT", "PART_I_ITEM2F_TOTAL_COMP_AMT",
-                "PART_1_ITEM2_TOTAL_COMP", "TOTAL_COMP", "TOTAL_COMPENSATION",
-                "TOT_COMP", "TOTAL_COMP_AMT",
-            ],
-            [
-                "SCH_C_PART_I_IT_2_DIR_COMP_AMT", "PART_I_ITEM2D_DIRECT_COMP_AMT",
-                "PART_1_ITEM2_DIRECT_COMP", "DIRECT_COMP", "DIR_COMP",
-            ],
-        ]:
-            c = _find_col(df_c, candidates)
-            if c and c not in keep_c:
-                keep_c.append(c)
+        df_c = df_c.reset_index(drop=True)
 
-        df_c = df_c[keep_c].reset_index(drop=True) if keep_c else df_c
-        print(f"[DOL] Schedule C kept columns: {keep_c}", flush=True)
+        # ── F_SCH_H (accountant, custodian, fees) ─────────────────────────
+        sch_h_lookup = {}  # ACK_ID -> dict of accountant, custodian, fees
+        if GDRIVE_SCHED_H_ID:
+            try:
+                df_h = _gdrive_download(GDRIVE_SCHED_H_ID, "F_SCH_H_2023")
+                ack_col_h = _find_col(df_h, ["ACK_ID"])
+
+                acct_col    = _find_col(df_h, ["ACCOUNTANT_FIRM_NAME"])
+                cust_col    = _find_col(df_h, ["FDCRY_TRUSTEE_CUST_NAME"])
+                trust_col   = _find_col(df_h, ["FDCRY_TRUST_NAME"])
+                trustee_fee = _find_col(df_h, ["TRUSTEE_CUSTODIAL_FEES_AMT"])
+                invst_fee   = _find_col(df_h, ["INVST_MGMT_FEES_AMT"])
+                admin_fee   = _find_col(df_h, ["CONTRACT_ADMIN_FEES_AMT"])
+                audit_fee   = _find_col(df_h, ["IQPA_AUDIT_FEES_AMT"])
+                total_admin = _find_col(df_h, ["TOT_ADMIN_EXPENSES_AMT"])
+                total_exp   = _find_col(df_h, ["TOT_EXPENSES_AMT"])
+                net_assets  = _find_col(df_h, ["NET_ASSETS_EOY_AMT"])
+
+                if ack_col_h:
+                    cit_ids = set(cit_df[ack_col_5500].str.strip())
+                    df_h_cit = df_h[df_h[ack_col_h].str.strip().isin(cit_ids)]
+
+                    for _, hrow in df_h_cit.iterrows():
+                        aid = str(hrow[ack_col_h]).strip()
+                        entry = {}
+
+                        # Accountant
+                        if acct_col:
+                            v = str(hrow[acct_col]).strip()
+                            if v and v.lower() != "nan":
+                                entry["accountant"] = v
+
+                        # Custodian/Trustee from Schedule H
+                        if cust_col:
+                            v = str(hrow[cust_col]).strip()
+                            if v and v.lower() != "nan":
+                                entry["custodian"] = v
+                        if "custodian" not in entry and trust_col:
+                            v = str(hrow[trust_col]).strip()
+                            if v and v.lower() != "nan":
+                                entry["custodian"] = v
+
+                        # Fee breakdown
+                        entry["trustee_fees"]    = _safe_float(hrow.get(trustee_fee)) if trustee_fee else 0
+                        entry["invst_mgmt_fees"] = _safe_float(hrow.get(invst_fee))   if invst_fee   else 0
+                        entry["admin_fees"]      = _safe_float(hrow.get(admin_fee))    if admin_fee   else 0
+                        entry["audit_fees"]      = _safe_float(hrow.get(audit_fee))    if audit_fee   else 0
+                        entry["total_admin_exp"] = _safe_float(hrow.get(total_admin))  if total_admin  else 0
+                        entry["total_expenses"]  = _safe_float(hrow.get(total_exp))    if total_exp    else 0
+                        entry["net_assets"]      = _safe_float(hrow.get(net_assets))   if net_assets   else 0
+
+                        if entry:
+                            sch_h_lookup[aid] = entry
+
+                    print(f"[DOL] Schedule H data for CITs: {len(sch_h_lookup):,} filings", flush=True)
+                del df_h
+            except Exception as e:
+                print(f"[DOL] Schedule H load skipped: {e}", flush=True)
+        else:
+            print("[DOL] No GDRIVE_SCHED_H_ID set -skipping Schedule H data.", flush=True)
 
         with _lock:
-            _data["cit_df"]      = cit_df
-            _data["sched_c_df"]  = df_c
-            _data["cit_count"]   = len(cit_df)
+            _data["cit_df"]        = cit_df
+            _data["sched_c_df"]    = df_c
+            _data["sch_h_lookup"]  = sch_h_lookup
+            _data["cit_count"]     = len(cit_df)
             _data["sched_c_count"] = len(df_c)
-            _data["loading"]     = False
-            _data["loaded"]      = True
+            _data["loading"]       = False
+            _data["loaded"]        = True
 
-        print("[DOL] ✓ Data load complete.", flush=True)
+        print("[DOL] Data load complete.", flush=True)
 
     except Exception as exc:
         import traceback
@@ -193,14 +221,14 @@ def _load_dol_data():
         with _lock:
             _data["loading"] = False
             _data["error"]   = str(exc)
-        print(f"[DOL] ✗ Data load failed: {exc}", flush=True)
+        print(f"[DOL] Data load failed: {exc}", flush=True)
 
 
 def _start_load():
     if GDRIVE_5500_ID and GDRIVE_SCHED_C_ID:
         threading.Thread(target=_load_dol_data, daemon=True).start()
     else:
-        print("[DOL] Skipping data load — env vars not set.", flush=True)
+        print("[DOL] Skipping data load -- env vars not set.", flush=True)
 
 
 _start_load()
@@ -230,7 +258,9 @@ def _classify_role(code_str: str) -> str:
 
 def _safe_float(val) -> float:
     try:
-        return float(str(val).replace(",", "").strip())
+        import math
+        v = float(str(val).replace(",", "").strip())
+        return 0.0 if math.isnan(v) or math.isinf(v) else v
     except (ValueError, TypeError):
         return 0.0
 
@@ -258,25 +288,27 @@ def dol_search():
         return jsonify({"error": "No query provided"}), 400
 
     with _lock:
-        loaded  = _data["loaded"]
-        loading = _data["loading"]
-        error   = _data["error"]
-        cit_df  = _data["cit_df"]
-        sched_c = _data["sched_c_df"]
+        loaded      = _data["loaded"]
+        loading     = _data["loading"]
+        error       = _data["error"]
+        cit_df      = _data["cit_df"]
+        sched_c     = _data["sched_c_df"]
+        sch_h       = _data.get("sch_h_lookup", {})
 
     if not loaded:
-        msg = "Data is loading — please wait 60–90 s and try again." if loading \
+        msg = "Data is loading -please wait 60–90 s and try again." if loading \
               else (f"Data load failed: {error}" if error
                     else "DOL data not loaded. Set GDRIVE_5500_ID and GDRIVE_SCHED_C_ID.")
         return jsonify({"error": msg}), 503
 
     try:
-        name_col    = _find_col(cit_df, ["PLAN_NAME", "PLAN_NAME_DFE", "NAME_OF_PLAN"])
-        sponsor_col = _find_col(cit_df, ["SPONS_DFE_NAME", "SPONS_NAME", "SPONSOR_NAME", "DFE_NAME"])
-        ack_col     = _find_col(cit_df, ["ACK_ID"])
-        ein_col     = _find_col(cit_df, ["SPONS_DFE_EIN", "PLAN_EIN", "EIN"])
-        year_col    = _find_col(cit_df, ["FORM_TAX_PRD", "TAX_PRD", "PLAN_YEAR_END",
-                                          "FORM_PLAN_YEAR_BEGIN_DATE", "PLAN_YEAR_BEGIN"])
+        name_col       = _find_col(cit_df, ["PLAN_NAME"])
+        sponsor_col    = _find_col(cit_df, ["SPONSOR_DFE_NAME", "SPONS_DFE_NAME"])
+        ack_col        = _find_col(cit_df, ["ACK_ID"])
+        ein_col        = _find_col(cit_df, ["SPONS_DFE_EIN"])
+        year_col       = _find_col(cit_df, ["FORM_TAX_PRD"])
+        admin_col      = _find_col(cit_df, ["ADMIN_NAME"])
+        admin_same_col = _find_col(cit_df, ["ADMIN_NAME_SAME_SPON_IND"])
 
         q_up = q.upper()
         mask = pd.Series(False, index=cit_df.index)
@@ -288,25 +320,12 @@ def dol_search():
         if hits.empty:
             return jsonify({"results": [], "total": 0})
 
-        # Schedule C column names
+        # Schedule C column names (actual 2023 names from DOL)
         sc_ack   = _find_col(sched_c, ["ACK_ID"])
-        sc_name  = _find_col(sched_c, [
-            "SCH_C_PART_I_IT_2_NM", "PART_I_ITEM2A_NM", "PART_1_ITEM2_NM",
-            "SERV_PROV_NAME", "SP_NAME", "NAME", "PROVIDER_NAME", "PT1_IT2_NM",
-        ])
-        sc_code  = _find_col(sched_c, [
-            "SCH_C_PART_I_IT_2_SERV_CD", "PART_I_ITEM2B_SERVICE_CD", "PART_1_ITEM2_SERV_CD",
-            "SERV_CD", "SERVICE_CD", "SERVICE_CODE", "SVC_CD",
-        ])
-        sc_total = _find_col(sched_c, [
-            "SCH_C_PART_I_IT_2_TOT_COMP_AMT", "PART_I_ITEM2F_TOTAL_COMP_AMT",
-            "PART_1_ITEM2_TOTAL_COMP", "TOTAL_COMP", "TOTAL_COMPENSATION",
-            "TOT_COMP", "TOTAL_COMP_AMT",
-        ])
-        sc_dir   = _find_col(sched_c, [
-            "SCH_C_PART_I_IT_2_DIR_COMP_AMT", "PART_I_ITEM2D_DIRECT_COMP_AMT",
-            "PART_1_ITEM2_DIRECT_COMP", "DIRECT_COMP", "DIR_COMP",
-        ])
+        sc_name  = _find_col(sched_c, ["PROVIDER_OTHER_NAME"])
+        sc_code  = _find_col(sched_c, ["PROVIDER_OTHER_SRVC_CODES"])
+        sc_dir   = _find_col(sched_c, ["PROVIDER_OTHER_DIRECT_COMP_AMT"])
+        sc_indir = _find_col(sched_c, ["PROV_OTHER_TOT_IND_COMP_AMT"])
 
         # Pre-index Schedule C by ACK_ID for fast lookup
         sc_index = {}
@@ -322,45 +341,152 @@ def dol_search():
             sponsor_name = str(row[sponsor_col]).strip() if sponsor_col else ""
             ein          = str(row[ein_col]).strip()    if ein_col     else ""
             year         = str(row[year_col]).strip()   if year_col    else ""
+            admin_name   = str(row[admin_col]).strip()  if admin_col   else ""
+            admin_same   = str(row[admin_same_col]).strip().upper() if admin_same_col else ""
 
-            providers = {"custodians": [], "trustees": [],
-                         "administrators": [], "accountants": [],
-                         "total_fees": 0.0}
+            # If admin name is empty but indicator says same as sponsor, use sponsor
+            if (not admin_name or admin_name.lower() == "nan") and admin_same in ("Y", "YES"):
+                admin_name = sponsor_name
 
+            # For CITs, the sponsor/DFE IS the trustee (the bank/trust company)
+            trustees = [{"name": sponsor_name, "fee": 0}] if sponsor_name and sponsor_name.lower() != "nan" else []
+
+            # Administrator
+            administrators = [{"name": admin_name, "fee": 0}] if admin_name and admin_name.lower() != "nan" else []
+
+            # Schedule H data: accountant, custodian, and fee breakdown
+            h = sch_h.get(ack_id, {})
+
+            custodians = []
+            if h.get("custodian"):
+                custodians.append({"name": h["custodian"], "fee": h.get("trustee_fees", 0)})
+
+            # Fee data from Schedule H
+            trustee_fees    = h.get("trustee_fees", 0)
+            invst_mgmt_fees = h.get("invst_mgmt_fees", 0)
+            admin_fees      = h.get("admin_fees", 0)
+            total_admin_exp = h.get("total_admin_exp", 0)
+            total_expenses  = h.get("total_expenses", 0)
+            net_assets      = h.get("net_assets", 0)
+
+            # Supplement with any Schedule C data (rare for CITs)
             for sp_row in sc_index.get(ack_id, []):
                 sp_name  = str(getattr(sp_row, sc_name,  "")).strip() if sc_name  else ""
                 svc_code = str(getattr(sp_row, sc_code,  "")).strip() if sc_code  else ""
-                fee_raw  = getattr(sp_row, sc_total, None) if sc_total else None
-                if fee_raw is None and sc_dir:
-                    fee_raw = getattr(sp_row, sc_dir, None)
-                fee = _safe_float(fee_raw)
-
-                providers["total_fees"] += fee
+                fee_direct  = _safe_float(getattr(sp_row, sc_dir,   None)) if sc_dir   else 0
+                fee_indirect = _safe_float(getattr(sp_row, sc_indir, None)) if sc_indir else 0
+                fee = fee_direct + fee_indirect
 
                 if not sp_name or sp_name.lower() in ("nan", ""):
                     continue
 
                 role = _classify_role(svc_code)
                 entry = {"name": sp_name, "fee": fee}
-                if role == "custodian":
-                    providers["custodians"].append(entry)
-                elif role == "trustee":
-                    providers["trustees"].append(entry)
-                elif role == "administrator":
-                    providers["administrators"].append(entry)
-                elif role == "accountant":
-                    providers["accountants"].append(entry)
+                if role == "custodian" and not custodians:
+                    custodians.append(entry)
 
             results.append({
-                "plan_name":    plan_name,
-                "sponsor_name": sponsor_name,
-                "ein":          ein,
-                "year":         year,
-                "ack_id":       ack_id,
-                **providers,
+                "plan_name":        plan_name,
+                "sponsor_name":     sponsor_name,
+                "ein":              ein,
+                "year":             year,
+                "ack_id":           ack_id,
+                "trustees":         trustees,
+                "custodians":       custodians,
+                "administrators":   administrators,
+                "trustee_fees":     trustee_fees,
+                "invst_mgmt_fees":  invst_mgmt_fees,
+                "admin_fees":       admin_fees,
+                "total_expenses":   total_expenses,
+                "net_assets":       net_assets,
             })
 
-        return jsonify({"results": results, "total": int(mask.sum())})
+        # Summary totals
+        totals = {
+            "net_assets":      sum(r["net_assets"]      for r in results),
+            "trustee_fees":    sum(r["trustee_fees"]    for r in results),
+            "invst_mgmt_fees": sum(r["invst_mgmt_fees"] for r in results),
+            "admin_fees":      sum(r["admin_fees"]      for r in results),
+            "total_expenses":  sum(r["total_expenses"]  for r in results),
+        }
+
+        return jsonify({"results": results, "total": int(mask.sum()), "totals": totals})
+
+    except Exception as exc:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.route("/api/summary")
+def summary():
+    """Aggregate stats: top custodians, trustees, administrators."""
+    with _lock:
+        loaded  = _data["loaded"]
+        loading = _data["loading"]
+        cit_df  = _data["cit_df"]
+        sch_h   = _data.get("sch_h_lookup", {})
+
+    if not loaded:
+        return jsonify({"error": "Data loading" if loading else "Data not loaded"}), 503
+
+    try:
+        ack_col        = _find_col(cit_df, ["ACK_ID"])
+        sponsor_col    = _find_col(cit_df, ["SPONSOR_DFE_NAME", "SPONS_DFE_NAME"])
+        admin_col      = _find_col(cit_df, ["ADMIN_NAME"])
+        admin_same_col = _find_col(cit_df, ["ADMIN_NAME_SAME_SPON_IND"])
+
+        # Accumulators: name -> {count, net_assets, total_expenses}
+        trustees     = {}
+        custodians   = {}
+        administrators = {}
+
+        total_net_assets = 0.0
+        total_expenses_all = 0.0
+        filing_count = len(cit_df)
+
+        for _, row in cit_df.iterrows():
+            ack_id       = str(row[ack_col]).strip()     if ack_col     else ""
+            sponsor_name = str(row[sponsor_col]).strip()  if sponsor_col else ""
+            admin_name   = str(row[admin_col]).strip()    if admin_col   else ""
+            admin_same   = str(row[admin_same_col]).strip().upper() if admin_same_col else ""
+
+            if (not admin_name or admin_name.lower() == "nan") and admin_same in ("Y", "YES"):
+                admin_name = sponsor_name
+
+            h = sch_h.get(ack_id, {})
+            na = h.get("net_assets", 0)
+            te = h.get("total_expenses", 0)
+            total_net_assets += na
+            total_expenses_all += te
+
+            cust_name = h.get("custodian", "")
+
+            def _accum(d, name, na, te):
+                if not name or name.lower() == "nan":
+                    return
+                if name not in d:
+                    d[name] = {"count": 0, "net_assets": 0.0, "total_expenses": 0.0}
+                d[name]["count"] += 1
+                d[name]["net_assets"] += na
+                d[name]["total_expenses"] += te
+
+            _accum(trustees, sponsor_name, na, te)
+            _accum(custodians, cust_name, na, te)
+            _accum(administrators, admin_name, na, h.get("admin_fees", 0))
+
+        def _top(d, limit=25):
+            items = sorted(d.items(), key=lambda x: x[1]["net_assets"], reverse=True)
+            return [{"name": k, **v} for k, v in items[:limit]]
+
+        return jsonify({
+            "filing_count":     filing_count,
+            "total_net_assets": total_net_assets,
+            "total_expenses":   total_expenses_all,
+            "top_trustees":       _top(trustees),
+            "top_custodians":     _top(custodians),
+            "top_administrators": _top(administrators),
+        })
 
     except Exception as exc:
         import traceback
@@ -370,7 +496,11 @@ def dol_search():
 
 @app.route("/api/provider-search")
 def provider_search():
-    """Reverse lookup: find all CITs that use a given service provider."""
+    """Reverse lookup: find all CITs that use a given service provider.
+
+    Searches across F_5500 (sponsor/trustee, administrator) and
+    Schedule H (custodian, accountant).
+    """
     q    = request.args.get("q", "").strip()
     role = request.args.get("role", "").strip().lower()
     if not q:
@@ -380,71 +510,81 @@ def provider_search():
         loaded  = _data["loaded"]
         loading = _data["loading"]
         cit_df  = _data["cit_df"]
-        sched_c = _data["sched_c_df"]
+        sch_h   = _data.get("sch_h_lookup", {})
 
     if not loaded:
         return jsonify({"error": "Data loading" if loading else "Data not loaded"}), 503
 
     try:
-        sc_name  = _find_col(sched_c, [
-            "SCH_C_PART_I_IT_2_NM", "PART_I_ITEM2A_NM", "PART_1_ITEM2_NM",
-            "SERV_PROV_NAME", "SP_NAME", "NAME", "PROVIDER_NAME", "PT1_IT2_NM",
-        ])
-        sc_ack   = _find_col(sched_c, ["ACK_ID"])
-        sc_code  = _find_col(sched_c, [
-            "SCH_C_PART_I_IT_2_SERV_CD", "PART_I_ITEM2B_SERVICE_CD", "PART_1_ITEM2_SERV_CD",
-            "SERV_CD", "SERVICE_CD", "SVC_CD",
-        ])
-        sc_total = _find_col(sched_c, [
-            "SCH_C_PART_I_IT_2_TOT_COMP_AMT", "PART_I_ITEM2F_TOTAL_COMP_AMT",
-            "PART_1_ITEM2_TOTAL_COMP", "TOTAL_COMP", "TOT_COMP",
-        ])
-
-        if not sc_name:
-            return jsonify({"error": "Provider-name column not found in Schedule C data"}), 500
+        ack_col     = _find_col(cit_df, ["ACK_ID"])
+        name_col    = _find_col(cit_df, ["PLAN_NAME"])
+        sponsor_col = _find_col(cit_df, ["SPONSOR_DFE_NAME", "SPONS_DFE_NAME"])
+        admin_col   = _find_col(cit_df, ["ADMIN_NAME"])
 
         q_up = q.upper()
-        prov_rows = sched_c[sched_c[sc_name].str.upper().str.contains(q_up, na=False, regex=False)]
-
-        if role and sc_code:
-            codes = _ROLE_CODES.get(role, set())
-            if codes:
-                prov_rows = prov_rows[
-                    prov_rows[sc_code].apply(
-                        lambda v: bool(set(re.findall(r"\d+", str(v))) & codes)
-                    )
-                ]
-
-        if prov_rows.empty:
-            return jsonify({"results": [], "total": 0})
-
-        ack_col_5500 = _find_col(cit_df, ["ACK_ID"])
-        name_col     = _find_col(cit_df, ["PLAN_NAME", "PLAN_NAME_DFE", "NAME_OF_PLAN"])
-        sponsor_col  = _find_col(cit_df, ["SPONS_DFE_NAME", "SPONS_NAME", "SPONSOR_NAME"])
-
-        # Build a quick ACK_ID → plan name lookup
-        plan_lookup = {}
-        if ack_col_5500 and name_col:
-            plan_lookup = dict(zip(
-                cit_df[ack_col_5500].str.strip(),
-                cit_df[name_col].str.strip()
-            ))
-
         results = []
-        for _, sp_row in prov_rows.head(200).iterrows():
-            ack_id = str(sp_row[sc_ack]).strip() if sc_ack else ""
-            fee = _safe_float(sp_row[sc_total]) if sc_total else 0.0
+
+        for _, row in cit_df.iterrows():
+            ack_id       = str(row[ack_col]).strip()     if ack_col     else ""
+            plan_name    = str(row[name_col]).strip()     if name_col    else ""
+            sponsor_name = str(row[sponsor_col]).strip()  if sponsor_col else ""
+            admin_name   = str(row[admin_col]).strip()    if admin_col   else ""
+            h            = sch_h.get(ack_id, {})
+            custodian    = h.get("custodian", "")
+            accountant   = h.get("accountant", "")
+
+            # Determine which roles match the query
+            matched_role = None
+            matched_name = ""
+            if q_up in sponsor_name.upper():
+                matched_role = "trustee"
+                matched_name = sponsor_name
+            if q_up in admin_name.upper():
+                matched_role = "administrator"
+                matched_name = admin_name
+            if q_up in custodian.upper():
+                matched_role = "custodian"
+                matched_name = custodian
+            if q_up in accountant.upper():
+                matched_role = "accountant"
+                matched_name = accountant
+
+            if not matched_role:
+                continue
+
+            # Filter by role if specified
+            if role and matched_role != role:
+                # Check if OTHER roles also match
+                skip = True
+                if role == "trustee"       and q_up in sponsor_name.upper(): skip = False; matched_role = "trustee"; matched_name = sponsor_name
+                if role == "administrator" and q_up in admin_name.upper():   skip = False; matched_role = "administrator"; matched_name = admin_name
+                if role == "custodian"     and q_up in custodian.upper():    skip = False; matched_role = "custodian"; matched_name = custodian
+                if role == "accountant"    and q_up in accountant.upper():   skip = False; matched_role = "accountant"; matched_name = accountant
+                if skip:
+                    continue
+
+            fee = 0.0
+            if matched_role == "trustee":
+                fee = h.get("trustee_fees", 0)
+            elif matched_role == "custodian":
+                fee = h.get("trustee_fees", 0)
+            elif matched_role == "administrator":
+                fee = h.get("admin_fees", 0)
+            elif matched_role == "accountant":
+                fee = h.get("audit_fees", 0)
+
             results.append({
-                "plan_name":     plan_lookup.get(ack_id, ""),
+                "plan_name":     plan_name,
                 "ack_id":        ack_id,
-                "provider_name": str(sp_row[sc_name]).strip(),
-                "service_code":  str(sp_row[sc_code]).strip() if sc_code else "",
+                "provider_name": matched_name,
+                "service_code":  matched_role,
                 "fee":           fee,
             })
-            if len(results) >= 150:
+
+            if len(results) >= 200:
                 break
 
-        return jsonify({"results": results, "total": len(prov_rows)})
+        return jsonify({"results": results, "total": len(results)})
 
     except Exception as exc:
         import traceback
