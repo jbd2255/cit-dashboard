@@ -35,7 +35,7 @@ GDRIVE_SCHED_H_ID = os.environ.get("GDRIVE_SCHED_H_ID", "")
 # ---------------------------------------------------------------------------
 # Google Drive download helper
 # ---------------------------------------------------------------------------
-def _gdrive_download(file_id: str, label: str) -> pd.DataFrame:
+def _gdrive_download(file_id: str, label: str, usecols: list = None) -> pd.DataFrame:
     """Download a public Google Drive CSV and return a DataFrame."""
     session = requests.Session()
 
@@ -52,15 +52,16 @@ def _gdrive_download(file_id: str, label: str) -> pd.DataFrame:
     for chunk in resp.iter_content(chunk_size=4 * 1024 * 1024):
         chunks.append(chunk)
         total += len(chunk)
-        print(f"[DOL]   {label}: {total/1024/1024:.0f} MB ...", flush=True)
+        if total % (16 * 1024 * 1024) < (4 * 1024 * 1024):
+            print(f"[DOL]   {label}: {total/1024/1024:.0f} MB ...", flush=True)
 
     content = b"".join(chunks)
     print(f"[DOL] {label}: {len(content)/1024/1024:.1f} MB downloaded", flush=True)
 
-    df = pd.read_csv(io.BytesIO(content), low_memory=False, dtype=str)
+    df = pd.read_csv(io.BytesIO(content), low_memory=False, dtype=str, usecols=usecols)
+    del content  # free memory immediately
     df.columns = [c.strip().upper() for c in df.columns]
     print(f"[DOL] {label}: {len(df):,} rows x {len(df.columns)} cols", flush=True)
-    print(f"[DOL] {label} columns: {list(df.columns)}", flush=True)
     return df
 
 
@@ -94,44 +95,25 @@ def _load_dol_data():
                 "GDRIVE_5500_ID and GDRIVE_SCHED_C_ID environment variables are not set."
             )
 
-        # ── F_5500 ────────────────────────────────────────────────────────
-        df5 = _gdrive_download(GDRIVE_5500_ID, "F_5500_2023")
+        # ── F_5500 (only load columns we need — 8 vs 140 saves ~95% RAM) ──
+        F5500_COLS = [
+            "ACK_ID", "TYPE_DFE_PLAN_ENTITY_CD", "PLAN_NAME",
+            "SPONSOR_DFE_NAME", "SPONS_DFE_EIN", "ADMIN_NAME",
+            "ADMIN_NAME_SAME_SPON_IND", "FORM_TAX_PRD",
+        ]
+        df5 = _gdrive_download(GDRIVE_5500_ID, "F_5500_2023", usecols=F5500_COLS)
 
-        # CITs are DFEs (Direct Filing Entities) — filter on TYPE_DFE_PLAN_ENTITY_CD
-        dfe_col  = _find_col(df5, ["TYPE_DFE_PLAN_ENTITY_CD"])
-        type_col = _find_col(df5, ["TYPE_PLAN_ENTITY_CD"])
-
-        if dfe_col:
-            cit_df = df5[df5[dfe_col].str.strip() == "C"].copy()
-        elif type_col:
-            cit_df = df5[df5[type_col].str.strip() == "C"].copy()
-        else:
-            print(f"[DOL] WARNING: entity-type column not found.", flush=True)
-            cit_df = df5.copy()
-
+        cit_df = df5[df5["TYPE_DFE_PLAN_ENTITY_CD"].str.strip() == "C"].copy()
         print(f"[DOL] CIT rows after filter: {len(cit_df):,}", flush=True)
-
-        # Keep only the columns we actually use to reduce RAM
-        keep_5500 = []
-        for candidates in [
-            ["ACK_ID"],
-            ["PLAN_NAME", "PLAN_NAME_DFE", "NAME_OF_PLAN"],
-            ["SPONSOR_DFE_NAME", "SPONS_DFE_NAME", "SPONS_NAME", "DFE_NAME"],
-            ["SPONS_DFE_EIN", "PLAN_EIN", "EIN"],
-            ["ADMIN_NAME"],
-            ["ADMIN_NAME_SAME_SPON_IND"],
-            ["FORM_TAX_PRD", "TAX_PRD", "PLAN_YEAR_END", "YEAR"],
-            ["FORM_PLAN_YEAR_BEGIN_DATE", "PLAN_YEAR_BEGIN"],
-        ]:
-            c = _find_col(cit_df, candidates)
-            if c and c not in keep_5500:
-                keep_5500.append(c)
-
-        cit_df = cit_df[keep_5500].reset_index(drop=True) if keep_5500 else cit_df
+        cit_df = cit_df.drop(columns=["TYPE_DFE_PLAN_ENTITY_CD"]).reset_index(drop=True)
         del df5
 
         # ── F_SCH_C_PART1_ITEM2 ──────────────────────────────────────────
-        df_c = _gdrive_download(GDRIVE_SCHED_C_ID, "F_SCH_C_PART1_ITEM2_2023")
+        SCH_C_COLS = [
+            "ACK_ID", "PROVIDER_OTHER_NAME", "PROVIDER_OTHER_SRVC_CODES",
+            "PROVIDER_OTHER_DIRECT_COMP_AMT", "PROV_OTHER_TOT_IND_COMP_AMT",
+        ]
+        df_c = _gdrive_download(GDRIVE_SCHED_C_ID, "F_SCH_C_PART1_ITEM2_2023", usecols=SCH_C_COLS)
 
         ack_col_5500 = _find_col(cit_df, ["ACK_ID"])
         ack_col_c    = _find_col(df_c,   ["ACK_ID"])
@@ -147,7 +129,14 @@ def _load_dol_data():
         sch_h_lookup = {}  # ACK_ID -> dict of accountant, custodian, fees
         if GDRIVE_SCHED_H_ID:
             try:
-                df_h = _gdrive_download(GDRIVE_SCHED_H_ID, "F_SCH_H_2023")
+                SCH_H_COLS = [
+                    "ACK_ID", "ACCOUNTANT_FIRM_NAME", "FDCRY_TRUSTEE_CUST_NAME",
+                    "FDCRY_TRUST_NAME", "TRUSTEE_CUSTODIAL_FEES_AMT",
+                    "INVST_MGMT_FEES_AMT", "CONTRACT_ADMIN_FEES_AMT",
+                    "IQPA_AUDIT_FEES_AMT", "TOT_ADMIN_EXPENSES_AMT",
+                    "TOT_EXPENSES_AMT", "NET_ASSETS_EOY_AMT",
+                ]
+                df_h = _gdrive_download(GDRIVE_SCHED_H_ID, "F_SCH_H_2023", usecols=SCH_H_COLS)
                 ack_col_h = _find_col(df_h, ["ACK_ID"])
 
                 acct_col    = _find_col(df_h, ["ACCOUNTANT_FIRM_NAME"])
