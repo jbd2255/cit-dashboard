@@ -1013,6 +1013,9 @@ function renderRankCard(title, items) {
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>
+      <div style="padding:8px 16px;font-size:10px;color:var(--muted);border-top:1px solid var(--border)">
+        Source: <a class="source-link" href="https://www.dol.gov/agencies/ebsa/about-ebsa/our-activities/public-disclosure/foia/form-5500-datasets" target="_blank">DOL Form 5500 2023 data</a> · Schedule H net assets and expenses
+      </div>
     </div>
   `;
 }
@@ -1057,19 +1060,38 @@ const CHART_COLORS = [
   '#64748b', '#78716c', '#a3a3a3',
 ];
 
+const pctPlugin = {
+  id: 'pctLabels',
+  afterDraw(chart) {
+    const {ctx} = chart;
+    chart.data.datasets.forEach((dataset, di) => {
+      const meta = chart.getDatasetMeta(di);
+      const total = dataset.data.reduce((a,b) => a+b, 0);
+      meta.data.forEach((arc, i) => {
+        const pct = (dataset.data[i] / total * 100);
+        if (pct < 3) return;
+        const {x, y} = arc.tooltipPosition();
+        ctx.save();
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 11px IBM Plex Sans, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(pct.toFixed(1) + '%', x, y);
+        ctx.restore();
+      });
+    });
+  }
+};
+Chart.register(pctPlugin);
+
 function makePie(canvasId, labels, data) {
   const total = data.reduce((a, b) => a + b, 0);
-  // Add percentages to legend labels
-  const pctLabels = labels.map((l, i) => {
-    const pct = ((data[i] / total) * 100).toFixed(1);
-    return `${l} (${pct}%)`;
-  });
 
   const ctx = $(canvasId).getContext('2d');
   new Chart(ctx, {
     type: 'doughnut',
     data: {
-      labels: pctLabels,
+      labels: labels,
       datasets: [{
         data: data,
         backgroundColor: CHART_COLORS.slice(0, labels.length),
@@ -1225,9 +1247,15 @@ function renderTrusteeRow(t, gtc) {
     if (t.custodian_note) custHtml += `<br><span style="font-size:11px;color:var(--muted)">(${t.custodian_note})</span>`;
   }
 
-  const srcHtml = t.source_url
-    ? `<a class="source-link" href="${t.source_url}" target="_blank">${t.source}</a>`
-    : t.source;
+  const dolUrl = 'https://www.dol.gov/agencies/ebsa/about-ebsa/our-activities/public-disclosure/foia/form-5500-datasets';
+  let srcHtml;
+  if (t.source_url) {
+    srcHtml = `<a class="source-link" href="${t.source_url}" target="_blank">${t.source}</a>`;
+  } else if (t.source && (t.source.includes('DOL') || t.source.includes('Schedule C'))) {
+    srcHtml = `<a class="source-link" href="${dolUrl}" target="_blank">${t.source}</a>`;
+  } else {
+    srcHtml = t.source;
+  }
 
   const aumStyle = (t.aum === 'Not disclosed') ? ' style="color:var(--muted)"' : '';
   const fundsStyle = (t.funds === 'Not disclosed') ? ' style="color:var(--muted)"' : '';
@@ -1247,9 +1275,15 @@ function renderTrusteeRow(t, gtc) {
 function renderCustodianSummaryCard(banks) {
   const rows = banks.map((b, i) => {
     const clientRows = b.clients.map(c => {
-      const srcLink = c.source_url
-        ? `<a class="source-link" href="${c.source_url}" target="_blank">${c.source}</a>`
-        : `<span style="color:var(--muted)">${c.source}</span>`;
+      const dolUrl = 'https://www.dol.gov/agencies/ebsa/about-ebsa/our-activities/public-disclosure/foia/form-5500-datasets';
+      let srcLink;
+      if (c.source_url) {
+        srcLink = `<a class="source-link" href="${c.source_url}" target="_blank">${c.source}</a>`;
+      } else if (c.source && (c.source.includes('DOL') || c.source.includes('Schedule C'))) {
+        srcLink = `<a class="source-link" href="${dolUrl}" target="_blank">${c.source}</a>`;
+      } else {
+        srcLink = `<span style="color:var(--muted)">${c.source}</span>`;
+      }
       return `<tr class="expand-row expand-${i}" style="display:none;background:#faf9f6">
         <td></td>
         <td style="padding-left:24px;font-size:12px">${c.trustee}</td>
