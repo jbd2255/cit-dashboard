@@ -978,8 +978,8 @@ async function loadSummary() {
     } catch (e) {}
 
     $('summary-grid').innerHTML =
-      renderRankCard('Top Trustees by Net Assets', data.top_trustees) +
       custBankHtml +
+      renderRankCard('Top Trustees by Net Assets', data.top_trustees) +
       renderRankCard('Top Administrators by Net Assets', data.top_administrators);
 
   } catch (e) {
