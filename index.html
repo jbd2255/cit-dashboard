@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>CIT Service Provider Dashboard</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <style>
   :root {
     --bg: #f7f6f2;
@@ -438,6 +439,36 @@
     margin-bottom: 1rem;
   }
 
+  .chart-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+  }
+
+  @media (max-width: 900px) { .chart-grid { grid-template-columns: 1fr; } }
+
+  .chart-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 1.25rem;
+  }
+
+  .chart-card h3 {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 0.75rem;
+  }
+
+  .chart-card canvas {
+    max-height: 280px;
+  }
+
   /* ── Summary tab styles ──────────────────────────────────── */
   .summary-grid {
     display: grid;
@@ -617,6 +648,25 @@
       <span class="count-badge">8 trustees</span>
     </div>
     <div class="data-year-label" id="custodian-data-year">Schedule C source: loading...</div>
+
+    <div class="chart-grid">
+      <div class="chart-card">
+        <h3>CIT AUM by Investment Manager</h3>
+        <canvas id="chart-by-manager"></canvas>
+      </div>
+      <div class="chart-card">
+        <h3>CIT AUM by Trustee Type</h3>
+        <canvas id="chart-by-trustee-type"></canvas>
+      </div>
+      <div class="chart-card">
+        <h3>CIT AUM by Custodian Bank</h3>
+        <canvas id="chart-by-custodian"></canvas>
+      </div>
+      <div class="chart-card">
+        <h3>CIT AUM: Target Date vs Non-Target Date</h3>
+        <canvas id="chart-td-split"></canvas>
+      </div>
+    </div>
 
     <div class="table-wrap" style="max-height:none">
       <table>
@@ -1053,6 +1103,57 @@ function renderRankCard(title, items) {
 updateDolLabel();
 loadSummary();
 loadGtcCustodians();
+loadCustodianCharts();
+
+// ── Chart helpers ──────────────────────────────────────────────────────────
+const CHART_COLORS = [
+  '#1a3a5c', '#2d6a4f', '#7a4500', '#3d2b6b', '#0a4a4a',
+  '#8b5cf6', '#d97706', '#059669', '#6366f1', '#dc2626',
+  '#0891b2', '#4f46e5', '#ca8a04', '#16a34a', '#9333ea',
+  '#64748b', '#78716c', '#a3a3a3',
+];
+
+function makePie(canvasId, labels, data) {
+  const ctx = $(canvasId).getContext('2d');
+  new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: labels,
+      datasets: [{
+        data: data,
+        backgroundColor: CHART_COLORS.slice(0, labels.length),
+        borderWidth: 1,
+        borderColor: '#fff',
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      plugins: {
+        legend: {
+          position: 'right',
+          labels: {
+            font: { family: "'IBM Plex Sans', sans-serif", size: 11 },
+            padding: 8,
+            usePointStyle: true,
+            pointStyleWidth: 8,
+          }
+        },
+        tooltip: {
+          callbacks: {
+            label: function(ctx) {
+              const v = ctx.parsed;
+              const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
+              const pct = ((v / total) * 100).toFixed(1);
+              if (v >= 1e12) return ` ${ctx.label}: $${(v/1e12).toFixed(2)}T (${pct}%)`;
+              return ` ${ctx.label}: $${(v/1e9).toFixed(0)}B (${pct}%)`;
+            }
+          }
+        }
+      }
+    }
+  });
+}
 
 // ── GTC dynamic custodian breakdown ────────────────────────────────────────
 async function loadGtcCustodians() {
@@ -1064,11 +1165,9 @@ async function loadGtcCustodians() {
     const gtc = data.gtc_breakdown;
     const year = data.data_year || '2023';
 
-    // Update data year label
     $('custodian-data-year').textContent =
       `Schedule C source: ${year} Form 5500 (latest complete year)`;
 
-    // Render the GTC custodian cell
     const cell = $('gtc-custodian-cell');
     if (!gtc || !gtc.buckets || gtc.buckets.length === 0) {
       cell.innerHTML = '<span style="color:var(--muted)">No custodian data found in Schedule C</span>';
@@ -1086,9 +1185,52 @@ async function loadGtcCustodians() {
       <ul class="cust-breakdown">${barsHtml}</ul>
       <span style="font-size:10px;color:var(--muted)">From ${gtc.total_plans} sampled plans, ${gtc.plans_with_custodian} with explicit custodian</span>
     `;
-  } catch (e) {
-    // Silently fail — GTC row will show loading state
-  }
+  } catch (e) {}
+}
+
+// ── Custodian tab pie charts ───────────────────────────────────────────────
+async function loadCustodianCharts() {
+  // Chart 1: CIT AUM by Investment Manager (live from DOL summary)
+  try {
+    const res = await fetch(`${API}/api/summary`);
+    const s = await res.json();
+    if (!s.error && s.top_trustees) {
+      const top = s.top_trustees.slice(0, 10);
+      const otherAum = s.top_trustees.slice(10).reduce((sum, t) => sum + t.net_assets, 0);
+      const labels = top.map(t => t.name);
+      const data   = top.map(t => t.net_assets);
+      if (otherAum > 0) { labels.push('Other'); data.push(otherAum); }
+      makePie('chart-by-manager', labels, data);
+    }
+  } catch (e) {}
+
+  // Chart 2: CIT AUM by Trustee Type (reference data)
+  const tpAum   = 210e9 + 200e9 + 100e9 + 50e9;              // Great Gray + SEI + GTC + other
+  const propAum = 555e9 + 283e9 + 257e9 + 162e9 + 80e9 + 120e9; // Vanguard + TRP + BLK + Fid + BNY + other
+  makePie('chart-by-trustee-type',
+    ['Third-party / White-label ($560B)', 'Manager Proprietary ($1.46T)'],
+    [tpAum, propAum]
+  );
+
+  // Chart 3: CIT AUM by Custodian Bank (mapped from reference table)
+  makePie('chart-by-custodian',
+    ['State Street', 'Northern Trust', 'JPMorgan Chase', 'BNY Mellon', 'SEI (self-custody)', 'M&T Bank', 'Multiple / Unknown'],
+    [853e9, 215e9, 140e9, 217e9, 200e9, 25e9, 347e9]
+  );
+  // State Street: Vanguard $555B + TRP $283B + GTC $15B
+  // Northern Trust: Great Gray $210B + GTC $5B
+  // JPMorgan: BlackRock split ~$130B + GTC $10B
+  // BNY Mellon: BlackRock split ~$127B + BNY self ~$80B + GTC $10B
+  // SEI: self-custody $200B
+  // M&T: GTC portion ~$25B
+  // Multiple/Unknown: Fidelity $162B + other $185B
+
+  // Chart 4: Target Date vs Non-Target Date (PSCA Jan 2025 + industry est.)
+  makePie('chart-td-split',
+    ['Target Date CITs ($2.02T)', 'Non-Target Date CITs ($2.58T)'],
+    [2.02e12, 2.58e12]
+  );
+  // Total CIT market ~$4.6T est.; TD = $2.02T per PSCA Jan 2025
 }
 </script>
 </body>
