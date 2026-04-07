@@ -550,8 +550,8 @@
 </header>
 
 <div class="tab-bar">
-  <button class="tab-btn"        onclick="switchTab('dol')">Search</button>
   <button class="tab-btn active" onclick="switchTab('summary')">Market Summary</button>
+  <button class="tab-btn"        onclick="switchTab('dol')">Search</button>
   <button class="tab-btn"        onclick="switchTab('custodians')">Custodians</button>
 </div>
 
@@ -813,8 +813,8 @@ function pills(arr, cls) {
 function switchTab(name) {
   document.querySelectorAll('.tab-btn').forEach((b, i) => {
     b.classList.toggle('active',
-      (i === 0 && name === 'dol') ||
-      (i === 1 && name === 'summary') ||
+      (i === 0 && name === 'summary') ||
+      (i === 1 && name === 'dol') ||
       (i === 2 && name === 'custodians'));
   });
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
@@ -1059,9 +1059,19 @@ async function loadSummary() {
       </div>
     `;
 
-    // Ranking tables
+    // Ranking tables — trustees, custodians (reference), then administrators
+    const custodianRef = [
+      { name: 'State Street', count: '2+ major', net_assets: 853e9, total_expenses: 0 },
+      { name: 'BNY Mellon', count: '2+ major', net_assets: 217e9, total_expenses: 0 },
+      { name: 'Northern Trust', count: '1 major', net_assets: 215e9, total_expenses: 0 },
+      { name: 'SEI (self-custody)', count: '1 (SEI)', net_assets: 200e9, total_expenses: 0 },
+      { name: 'JPMorgan Chase', count: '1+ major', net_assets: 140e9, total_expenses: 0 },
+      { name: 'M&T Bank', count: 'GTC plans', net_assets: 25e9, total_expenses: 0 },
+    ];
+
     $('summary-grid').innerHTML =
       renderRankCard('Top Trustees by Net Assets', data.top_trustees) +
+      renderRankCardStatic('Top Custodian Banks by Est. CIT AUM', custodianRef) +
       renderRankCard('Top Administrators by Net Assets', data.top_administrators);
 
   } catch (e) {
@@ -1099,6 +1109,32 @@ function renderRankCard(title, items) {
   `;
 }
 
+function renderRankCardStatic(title, items) {
+  const rows = items.map((r, i) => `
+    <tr>
+      <td class="rank">${i + 1}</td>
+      <td class="entity">${r.name}</td>
+      <td class="cnt">${r.count}</td>
+      <td class="num">${fmt$(r.net_assets)}</td>
+    </tr>
+  `).join('');
+
+  return `
+    <div class="summary-card">
+      <h3>${title}</h3>
+      <table>
+        <thead><tr>
+          <th style="width:30px">#</th>
+          <th>Name</th>
+          <th style="text-align:center;width:80px">Clients</th>
+          <th style="text-align:right">Est. CIT AUM</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
+}
+
 // Initialise role selector visibility
 updateDolLabel();
 loadSummary();
@@ -1114,11 +1150,18 @@ const CHART_COLORS = [
 ];
 
 function makePie(canvasId, labels, data) {
+  const total = data.reduce((a, b) => a + b, 0);
+  // Add percentages to legend labels
+  const pctLabels = labels.map((l, i) => {
+    const pct = ((data[i] / total) * 100).toFixed(1);
+    return `${l} (${pct}%)`;
+  });
+
   const ctx = $(canvasId).getContext('2d');
   new Chart(ctx, {
     type: 'doughnut',
     data: {
-      labels: labels,
+      labels: pctLabels,
       datasets: [{
         data: data,
         backgroundColor: CHART_COLORS.slice(0, labels.length),
@@ -1143,10 +1186,10 @@ function makePie(canvasId, labels, data) {
           callbacks: {
             label: function(ctx) {
               const v = ctx.parsed;
-              const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
-              const pct = ((v / total) * 100).toFixed(1);
-              if (v >= 1e12) return ` ${ctx.label}: $${(v/1e12).toFixed(2)}T (${pct}%)`;
-              return ` ${ctx.label}: $${(v/1e9).toFixed(0)}B (${pct}%)`;
+              const t = ctx.dataset.data.reduce((a, b) => a + b, 0);
+              const pct = ((v / t) * 100).toFixed(1);
+              if (v >= 1e12) return ` $${(v/1e12).toFixed(2)}T (${pct}%)`;
+              return ` $${(v/1e9).toFixed(0)}B (${pct}%)`;
             }
           }
         }
@@ -1195,8 +1238,8 @@ async function loadCustodianCharts() {
     const res = await fetch(`${API}/api/summary`);
     const s = await res.json();
     if (!s.error && s.top_trustees) {
-      const top = s.top_trustees.slice(0, 10);
-      const otherAum = s.top_trustees.slice(10).reduce((sum, t) => sum + t.net_assets, 0);
+      const top = s.top_trustees.slice(0, 6);
+      const otherAum = s.top_trustees.slice(6).reduce((sum, t) => sum + t.net_assets, 0);
       const labels = top.map(t => t.name);
       const data   = top.map(t => t.net_assets);
       if (otherAum > 0) { labels.push('Other'); data.push(otherAum); }
@@ -1212,17 +1255,17 @@ async function loadCustodianCharts() {
     [tpAum, propAum]
   );
 
-  // Chart 3: CIT AUM by Custodian Bank (mapped from reference table)
+  // Chart 3: CIT AUM by Custodian Bank — top 6 + Other
   makePie('chart-by-custodian',
-    ['State Street', 'Northern Trust', 'JPMorgan Chase', 'BNY Mellon', 'SEI (self-custody)', 'M&T Bank', 'Multiple / Unknown'],
-    [853e9, 215e9, 140e9, 217e9, 200e9, 25e9, 347e9]
+    ['State Street', 'BNY Mellon', 'Northern Trust', 'SEI (self-custody)', 'JPMorgan Chase', 'Other'],
+    [853e9, 217e9, 215e9, 200e9, 140e9, 372e9]
   );
   // State Street: Vanguard $555B + TRP $283B + GTC $15B
-  // Northern Trust: Great Gray $210B + GTC $5B
-  // JPMorgan: BlackRock split ~$130B + GTC $10B
   // BNY Mellon: BlackRock split ~$127B + BNY self ~$80B + GTC $10B
+  // Northern Trust: Great Gray $210B + GTC $5B
   // SEI: self-custody $200B
-  // M&T: GTC portion ~$25B
+  // JPMorgan: BlackRock split ~$130B + GTC $10B
+  // Other: M&T $25B + Fidelity $162B + remaining $185B
   // Multiple/Unknown: Fidelity $162B + other $185B
 
   // Chart 4: Target Date vs Non-Target Date (PSCA Jan 2025 + industry est.)
