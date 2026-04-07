@@ -40,8 +40,10 @@ GITHUB_RELEASE = "https://github.com/jbd2255/cit-dashboard/releases/download/v0.
 # CSV download helper (supports direct URLs and Google Drive IDs)
 # ---------------------------------------------------------------------------
 def _download_csv(url_or_id: str, label: str, usecols: list = None) -> pd.DataFrame:
-    """Download a CSV from a URL and return a DataFrame."""
-    # If it looks like a Google Drive file ID (no slashes), build the Drive URL
+    """Download a CSV from a URL and return a DataFrame.
+    Streams to a temp file to avoid holding the entire file in memory."""
+    import tempfile
+
     if url_or_id and "/" not in url_or_id:
         url = f"https://drive.usercontent.google.com/download?id={url_or_id}&export=download&confirm=t"
     else:
@@ -51,30 +53,35 @@ def _download_csv(url_or_id: str, label: str, usecols: list = None) -> pd.DataFr
     resp = requests.get(url, timeout=600, stream=True)
     resp.raise_for_status()
 
-    chunks, total = [], 0
-    for chunk in resp.iter_content(chunk_size=4 * 1024 * 1024):
-        chunks.append(chunk)
+    # Stream to temp file (avoids holding full file in memory)
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".csv")
+    total = 0
+    first_chunk = None
+    for chunk in resp.iter_content(chunk_size=1024 * 1024):
+        if first_chunk is None:
+            first_chunk = chunk
+        tmp.write(chunk)
         total += len(chunk)
-        if total % (16 * 1024 * 1024) < (4 * 1024 * 1024):
+        if total % (16 * 1024 * 1024) < (1024 * 1024):
             print(f"[DOL]   {label}: {total/1024/1024:.0f} MB ...", flush=True)
+    tmp.close()
+    print(f"[DOL] {label}: {total/1024/1024:.1f} MB downloaded", flush=True)
 
-    content = b"".join(chunks)
-    print(f"[DOL] {label}: {len(content)/1024/1024:.1f} MB downloaded", flush=True)
+    # Check for error pages
+    if first_chunk:
+        sample = first_chunk[:500].decode("utf-8", errors="ignore").lower()
+        if "<!doctype" in sample or "<html" in sample:
+            os.unlink(tmp.name)
+            raise RuntimeError(f"{label}: Got HTML instead of CSV. Check the download URL or quota.")
 
-    # Check for error pages (HTML instead of CSV)
-    sample = content[:500].decode("utf-8", errors="ignore").lower()
-    if "<!doctype" in sample or "<html" in sample:
-        del content
-        raise RuntimeError(f"{label}: Got HTML instead of CSV. Check the download URL or quota.")
-
-    # usecols with case-insensitive matching (CSV headers may have mixed case)
+    # Parse CSV from temp file (memory-efficient)
     if usecols:
         needed = {c.upper() for c in usecols}
         col_filter = lambda c: c.strip().upper() in needed
     else:
         col_filter = None
-    df = pd.read_csv(io.BytesIO(content), low_memory=False, dtype=str, usecols=col_filter)
-    del content  # free memory immediately
+    df = pd.read_csv(tmp.name, low_memory=False, dtype=str, usecols=col_filter)
+    os.unlink(tmp.name)  # delete temp file
     df.columns = [c.strip().upper() for c in df.columns]
     print(f"[DOL] {label}: {len(df):,} rows x {len(df.columns)} cols", flush=True)
     return df
