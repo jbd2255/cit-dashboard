@@ -423,6 +423,21 @@
 
   .td-split { font-size: 12px; line-height: 1.5; max-width: 280px; }
 
+  .last-verified {
+    display: block;
+    margin-top: 4px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+  }
+
+  .data-year-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    margin-bottom: 1rem;
+  }
+
   /* ── Summary tab styles ──────────────────────────────────── */
   .summary-grid {
     display: grid;
@@ -597,10 +612,11 @@
        ══════════════════════════════════════════════════════════ -->
   <div id="tab-custodians" class="tab-panel">
 
-    <div class="results-header" style="margin-bottom:1rem">
+    <div class="results-header" style="margin-bottom:0.5rem">
       <span class="results-title">CIT Trustee &amp; Custody Bank Reference</span>
       <span class="count-badge">8 trustees</span>
     </div>
+    <div class="data-year-label" id="custodian-data-year">Schedule C source: loading...</div>
 
     <div class="table-wrap" style="max-height:none">
       <table>
@@ -627,7 +643,7 @@
             <td class="fee-cell">$210B+</td>
             <td class="fee-cell">770+</td>
             <td class="td-split">Large TD presence &mdash; 18 co-manufactured TD series ($36B in that subset as of Jun 2024). Majority of fund count is single-strategy non-TD.</td>
-            <td><a class="source-link" href="https://greatgray.com/wp-content/uploads/2025/05/0.96-BlackRock-LifePath-Dynamic-Funds-2024-Final.pdf" target="_blank">BlackRock LifePath Dynamic Fund Series 2024 Annual Report, Note 1 (PwC-audited)</a></td>
+            <td><a class="source-link" href="https://greatgray.com/wp-content/uploads/2025/05/0.96-BlackRock-LifePath-Dynamic-Funds-2024-Final.pdf" target="_blank">BlackRock LifePath Dynamic Fund Series 2024 Annual Report, Note 1 (PwC-audited)</a><span class="last-verified">Last verified: 2026-04-06</span></td>
           </tr>
 
           <!-- Row 2: SEI -->
@@ -638,22 +654,14 @@
             <td class="fee-cell">$200B+</td>
             <td class="fee-cell">570+</td>
             <td class="td-split">Predominantly non-TD. Single-manager strategies across 167+ asset managers.</td>
-            <td><a class="source-link" href="https://seic.com/sei-trust-company/about-sei-trust-company" target="_blank">SEI About page</a>: &ldquo;provides trustee, custodial, operational and administrative services.&rdquo; No external custodian named in reviewed public filings.</td>
+            <td><a class="source-link" href="https://seic.com/sei-trust-company/about-sei-trust-company" target="_blank">SEI About page</a>: &ldquo;provides trustee, custodial, operational and administrative services.&rdquo; No external custodian named in reviewed public filings.<span class="last-verified">Last verified: 2026-04-06</span></td>
           </tr>
 
-          <!-- Row 3: GTC -->
-          <tr>
+          <!-- Row 3: GTC (dynamic custodian breakdown from Schedule C) -->
+          <tr id="gtc-row">
             <td class="fund-name">Global Trust Company<br><span style="font-size:11px;color:var(--muted);font-weight:400">(GTC / BPAS)</span></td>
-            <td>
-              <span style="font-size:12px;font-weight:500">Multi-custodian, client-driven</span>
-              <ul class="cust-breakdown">
-                <li><span class="cust-bar-label">5</span><div class="cust-bar" style="width:100px"></div> M&amp;T Bank</li>
-                <li><span class="cust-bar-label">2</span><div class="cust-bar" style="width:40px"></div> BNY Mellon</li>
-                <li><span class="cust-bar-label">2</span><div class="cust-bar" style="width:40px"></div> JPMorgan Chase</li>
-                <li><span class="cust-bar-label">2</span><div class="cust-bar" style="width:40px"></div> State Street</li>
-                <li><span class="cust-bar-label">1</span><div class="cust-bar" style="width:20px"></div> Northern Trust</li>
-              </ul>
-              <span style="font-size:10px;color:var(--muted)">From 35 sampled plans, 12 with explicit custodian</span>
+            <td id="gtc-custodian-cell">
+              <span style="font-size:12px;color:var(--muted)">Loading from Schedule C...</span>
             </td>
             <td><span class="badge badge-5500">5500-derived</span></td>
             <td class="fee-cell">~$100B</td>
@@ -673,7 +681,7 @@
             <td class="fee-cell" style="color:var(--muted)">Not disclosed</td>
             <td class="fee-cell" style="color:var(--muted)">Not disclosed</td>
             <td class="td-split">Primarily institutional strategies. No public TD market share data for BNY as trustee.</td>
-            <td><a class="source-link" href="https://bny.com/investments/us/en/institutional/collective-investment-trusts.html" target="_blank">BNY CIT page</a>: &ldquo;CITs are custodied at and unitized by BNY Asset Servicing.&rdquo;</td>
+            <td><a class="source-link" href="https://bny.com/investments/us/en/institutional/collective-investment-trusts.html" target="_blank">BNY CIT page</a>: &ldquo;CITs are custodied at and unitized by BNY Asset Servicing.&rdquo;<span class="last-verified">Last verified: 2026-04-06</span></td>
           </tr>
 
           <!-- Row 5: BlackRock -->
@@ -684,7 +692,7 @@
             <td class="fee-cell">~$257B</td>
             <td class="fee-cell" style="color:var(--muted)">Not disclosed</td>
             <td class="td-split">TD-heavy &mdash; LifePath Index and LifePath Dynamic CIT series. Non-TD index and active strategies also offered.</td>
-            <td><a class="source-link" href="https://www.sec.gov/Archives/edgar/data/0000844779/000119312517201568/d410502d497.htm" target="_blank">BlackRock Funds SEC Form 497, Jun 2017</a>; CIT TD AUM: P&amp;I DC Survey, Oct 2024</td>
+            <td><a class="source-link" href="https://www.sec.gov/Archives/edgar/data/0000844779/000119312517201568/d410502d497.htm" target="_blank">BlackRock Funds SEC Form 497, Jun 2017</a>; CIT TD AUM: P&amp;I DC Survey, Oct 2024<span class="last-verified">Last verified: 2026-04-06</span></td>
           </tr>
 
           <!-- Row 6: Vanguard -->
@@ -695,7 +703,7 @@
             <td class="fee-cell">~$555B</td>
             <td class="fee-cell" style="color:var(--muted)">Not disclosed</td>
             <td class="td-split">TD dominant &mdash; 38% of CIT TD market. Target Retirement Trust series. Also offers large non-TD index trusts (500 Index, Total Stock Market, bond trusts).</td>
-            <td><a class="source-link" href="https://workplace.vanguard.com/content/dam/inst/iig-transformation/trust-financial-documents/Russell_1000_Value_Index_Trust.pdf" target="_blank">VFTC fund financials</a>; Global Custodian (2021) &mdash; Vanguard moved $1T+ from BBH to State Street in 2018. P&amp;I DC Survey, Oct 2024 for AUM.</td>
+            <td><a class="source-link" href="https://workplace.vanguard.com/content/dam/inst/iig-transformation/trust-financial-documents/Russell_1000_Value_Index_Trust.pdf" target="_blank">VFTC fund financials</a>; Global Custodian (2021) &mdash; Vanguard moved $1T+ from BBH to State Street in 2018. P&amp;I DC Survey, Oct 2024 for AUM.<span class="last-verified">Last verified: 2026-04-06</span></td>
           </tr>
 
           <!-- Row 7: T. Rowe Price -->
@@ -706,7 +714,7 @@
             <td class="fee-cell">~$283B</td>
             <td class="fee-cell" style="color:var(--muted)">Not disclosed</td>
             <td class="td-split">TD-heavy &mdash; 14% of CIT TD market. T. Rowe Price Retirement series CIT. Non-TD equity and fixed income CITs also offered.</td>
-            <td><a class="source-link" href="https://www.sec.gov/Archives/edgar/data/0000858581/000174177323003372/ex99gcustagreemt-cust1.htm" target="_blank">T. Rowe Price Index Trust SEC 485BPOS, Custodian Agreement (2023)</a>. Standing agreement with State Street dated Jan 28, 1998. Market share: Morningstar via PlanSponsor (2026), applied to $2.02T total (PSCA, Jan 2025).</td>
+            <td><a class="source-link" href="https://www.sec.gov/Archives/edgar/data/0000858581/000174177323003372/ex99gcustagreemt-cust1.htm" target="_blank">T. Rowe Price Index Trust SEC 485BPOS, Custodian Agreement (2023)</a>. Standing agreement with State Street dated Jan 28, 1998. Market share: Morningstar via PlanSponsor (2026), applied to $2.02T total (PSCA, Jan 2025).<span class="last-verified">Last verified: 2026-04-06</span></td>
           </tr>
 
           <!-- Row 8: Fidelity -->
@@ -717,7 +725,7 @@
             <td class="fee-cell">~$162B</td>
             <td class="fee-cell" style="color:var(--muted)">Not disclosed</td>
             <td class="td-split">TD significant &mdash; 8% of CIT TD market. Freedom Index CIT and Freedom CIT series. Non-TD equity and bond CITs also offered.</td>
-            <td>FMTC is a Mass.-chartered bank with its own custody authority. No single public source naming custodian across the CIT book &mdash; fund-level research required. Market share: Morningstar via PlanSponsor (2026).</td>
+            <td>FMTC is a Mass.-chartered bank with its own custody authority. No single public source naming custodian across the CIT book &mdash; fund-level research required. Market share: Morningstar via PlanSponsor (2026).<span class="last-verified">Last verified: 2026-04-06</span></td>
           </tr>
         </tbody>
       </table>
@@ -1044,6 +1052,44 @@ function renderRankCard(title, items) {
 // Initialise role selector visibility
 updateDolLabel();
 loadSummary();
+loadGtcCustodians();
+
+// ── GTC dynamic custodian breakdown ────────────────────────────────────────
+async function loadGtcCustodians() {
+  try {
+    const res  = await fetch(`${API}/api/gtc-custodians`);
+    const data = await res.json();
+    if (data.error) return;
+
+    const gtc = data.gtc_breakdown;
+    const year = data.data_year || '2023';
+
+    // Update data year label
+    $('custodian-data-year').textContent =
+      `Schedule C source: ${year} Form 5500 (latest complete year)`;
+
+    // Render the GTC custodian cell
+    const cell = $('gtc-custodian-cell');
+    if (!gtc || !gtc.buckets || gtc.buckets.length === 0) {
+      cell.innerHTML = '<span style="color:var(--muted)">No custodian data found in Schedule C</span>';
+      return;
+    }
+
+    const maxCount = Math.max(...gtc.buckets.map(b => b.count));
+    const barsHtml = gtc.buckets.map(b => {
+      const w = Math.max(12, Math.round((b.count / maxCount) * 100));
+      return `<li><span class="cust-bar-label">${b.count}</span><div class="cust-bar" style="width:${w}px"></div> ${b.name}</li>`;
+    }).join('');
+
+    cell.innerHTML = `
+      <span style="font-size:12px;font-weight:500">Multi-custodian, client-driven</span>
+      <ul class="cust-breakdown">${barsHtml}</ul>
+      <span style="font-size:10px;color:var(--muted)">From ${gtc.total_plans} sampled plans, ${gtc.plans_with_custodian} with explicit custodian</span>
+    `;
+  } catch (e) {
+    // Silently fail — GTC row will show loading state
+  }
+}
 </script>
 </body>
 </html>

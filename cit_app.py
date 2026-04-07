@@ -104,6 +104,80 @@ def _find_col(df: pd.DataFrame, candidates: list) -> str | None:
 
 
 # ---------------------------------------------------------------------------
+# GTC custodian breakdown from Schedule C
+# ---------------------------------------------------------------------------
+GTC_EINS = {"263761443", "367634097"}
+
+_CUSTODIAN_BUCKETS = {
+    "STATE STREET":   "State Street",
+    "NORTHERN TRUST":  "Northern Trust",
+    "BNY":            "BNY / Bank of New York Mellon",
+    "BANK OF NEW YORK": "BNY / Bank of New York Mellon",
+    "MELLON":         "BNY / Bank of New York Mellon",
+    "JPMORGAN":       "JPMorgan Chase",
+    "JP MORGAN":      "JPMorgan Chase",
+    "CHASE":          "JPMorgan Chase",
+    "M&T":            "M&T Bank",
+    "M & T":          "M&T Bank",
+}
+
+
+def _bucket_custodian(name: str) -> str:
+    up = name.upper()
+    for key, bucket in _CUSTODIAN_BUCKETS.items():
+        if key in up:
+            return bucket
+    return "Other"
+
+
+def _compute_gtc_breakdown(df_c: pd.DataFrame) -> dict:
+    """From full Schedule C, find GTC-trusteed plans and their custodians."""
+    ein_col = _find_col(df_c, ["PROVIDER_OTHER_EIN"])
+    ack_col = _find_col(df_c, ["ACK_ID"])
+    rel_col = _find_col(df_c, ["PROVIDER_OTHER_RELATION"])
+    name_col = _find_col(df_c, ["PROVIDER_OTHER_NAME"])
+
+    if not all([ein_col, ack_col, rel_col, name_col]):
+        return {"buckets": [], "total_plans": 0, "plans_with_custodian": 0}
+
+    # Step 1: Find ACK_IDs where GTC is a provider (by EIN)
+    gtc_rows = df_c[df_c[ein_col].astype(str).str.strip().isin(GTC_EINS)]
+    gtc_ack_ids = set(gtc_rows[ack_col].astype(str).str.strip())
+    total_plans = len(gtc_ack_ids)
+
+    # Step 2: Within those ACK_IDs, find custodian rows
+    plans_subset = df_c[df_c[ack_col].astype(str).str.strip().isin(gtc_ack_ids)]
+    custodian_rows = plans_subset[
+        plans_subset[rel_col].astype(str).str.upper().str.contains("CUSTODIAN", na=False) &
+        ~plans_subset[rel_col].astype(str).str.upper().str.contains("CUSTODIAN-MANAGER", na=False)
+    ]
+
+    # Step 3: Bucket by name, count unique ACK_IDs per bucket
+    bucket_counts = {}
+    for _, row in custodian_rows.iterrows():
+        aid = str(row[ack_col]).strip()
+        pname = str(row[name_col]).strip()
+        if not pname or pname.lower() == "nan":
+            continue
+        bucket = _bucket_custodian(pname)
+        if bucket not in bucket_counts:
+            bucket_counts[bucket] = set()
+        bucket_counts[bucket].add(aid)
+
+    buckets = sorted(
+        [{"name": k, "count": len(v)} for k, v in bucket_counts.items()],
+        key=lambda x: x["count"], reverse=True
+    )
+    plans_with_custodian = len(set().union(*bucket_counts.values())) if bucket_counts else 0
+
+    return {
+        "buckets": buckets,
+        "total_plans": total_plans,
+        "plans_with_custodian": plans_with_custodian,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Background data loader
 # ---------------------------------------------------------------------------
 def _load_dol_data():
@@ -139,8 +213,13 @@ def _load_dol_data():
         SCH_C_COLS = [
             "ACK_ID", "PROVIDER_OTHER_NAME", "PROVIDER_OTHER_SRVC_CODES",
             "PROVIDER_OTHER_DIRECT_COMP_AMT", "PROV_OTHER_TOT_IND_COMP_AMT",
+            "PROVIDER_OTHER_EIN", "PROVIDER_OTHER_RELATION",
         ]
         df_c = _download_csv(url_sc, "F_SCH_C_PART1_ITEM2_2023", usecols=SCH_C_COLS)
+
+        # ── GTC custodian breakdown (computed from full Schedule C) ────────
+        gtc_breakdown = _compute_gtc_breakdown(df_c)
+        print(f"[DOL] GTC custodian breakdown: {gtc_breakdown}", flush=True)
 
         ack_col_5500 = _find_col(cit_df, ["ACK_ID"])
         ack_col_c    = _find_col(df_c,   ["ACK_ID"])
@@ -221,13 +300,15 @@ def _load_dol_data():
             print("[DOL] No GDRIVE_SCHED_H_ID set -skipping Schedule H data.", flush=True)
 
         with _lock:
-            _data["cit_df"]        = cit_df
-            _data["sched_c_df"]    = df_c
-            _data["sch_h_lookup"]  = sch_h_lookup
-            _data["cit_count"]     = len(cit_df)
-            _data["sched_c_count"] = len(df_c)
-            _data["loading"]       = False
-            _data["loaded"]        = True
+            _data["cit_df"]          = cit_df
+            _data["sched_c_df"]      = df_c
+            _data["sch_h_lookup"]    = sch_h_lookup
+            _data["gtc_breakdown"]   = gtc_breakdown
+            _data["data_year"]       = "2023"
+            _data["cit_count"]       = len(cit_df)
+            _data["sched_c_count"]   = len(df_c)
+            _data["loading"]         = False
+            _data["loaded"]          = True
 
         print("[DOL] Data load complete.", flush=True)
 
@@ -291,6 +372,7 @@ def data_status():
             "error":         _data["error"],
             "cit_count":     _data["cit_count"],
             "sched_c_count": _data["sched_c_count"],
+            "data_year":     _data.get("data_year", ""),
         })
 
 
@@ -506,6 +588,21 @@ def summary():
         import traceback
         traceback.print_exc()
         return jsonify({"error": str(exc)}), 500
+
+
+@app.route("/api/gtc-custodians")
+def gtc_custodians():
+    """Return GTC custodian breakdown and data year."""
+    with _lock:
+        loaded  = _data["loaded"]
+        loading = _data["loading"]
+        gtc     = _data.get("gtc_breakdown", {})
+        year    = _data.get("data_year", "2023")
+
+    if not loaded:
+        return jsonify({"error": "Data loading" if loading else "Data not loaded"}), 503
+
+    return jsonify({"gtc_breakdown": gtc, "data_year": year})
 
 
 @app.route("/api/provider-search")
