@@ -645,7 +645,7 @@
 
     <div class="results-header" style="margin-bottom:0.5rem">
       <span class="results-title">CIT Trustee &amp; Custody Bank Reference</span>
-      <span class="count-badge">8 trustees</span>
+      <span class="count-badge" id="cust-count">loading...</span>
     </div>
     <div class="data-year-label" id="custodian-data-year">Schedule C source: loading...</div>
 
@@ -668,6 +668,7 @@
       </div>
     </div>
 
+    <!-- Dynamic trustee reference table -->
     <div class="table-wrap" style="max-height:none">
       <table>
         <thead>
@@ -681,108 +682,14 @@
             <th>Source</th>
           </tr>
         </thead>
-        <tbody>
-          <!-- Section: White-label / Third-party Trustees -->
-          <tr><td colspan="7" class="cust-section-label">White-label / Third-party Trustees</td></tr>
-
-          <!-- Row 1: Great Gray -->
-          <tr>
-            <td class="fund-name">Great Gray Trust Company<br><span style="font-size:11px;color:var(--muted);font-weight:400">(incl. former Wilmington Trust CIT &mdash; both now under MDP)</span></td>
-            <td>Northern Trust<br><span style="font-size:11px;color:var(--muted)">(also provides TA and fund accounting)</span></td>
-            <td><span class="badge badge-confirmed">Confirmed</span></td>
-            <td class="fee-cell">$210B+</td>
-            <td class="fee-cell">770+</td>
-            <td class="td-split">Large TD presence &mdash; 18 co-manufactured TD series ($36B in that subset as of Jun 2024). Majority of fund count is single-strategy non-TD.</td>
-            <td><a class="source-link" href="https://greatgray.com/wp-content/uploads/2025/05/0.96-BlackRock-LifePath-Dynamic-Funds-2024-Final.pdf" target="_blank">BlackRock LifePath Dynamic Fund Series 2024 Annual Report, Note 1 (PwC-audited)</a><span class="last-verified">Last verified: 2026-04-06</span></td>
-          </tr>
-
-          <!-- Row 2: SEI -->
-          <tr>
-            <td class="fund-name">SEI Trust Company</td>
-            <td>SEI<br><span style="font-size:11px;color:var(--muted)">(self-custody &mdash; in-house platform)</span></td>
-            <td><span class="badge badge-self">Self-reported</span></td>
-            <td class="fee-cell">$200B+</td>
-            <td class="fee-cell">570+</td>
-            <td class="td-split">Predominantly non-TD. Single-manager strategies across 167+ asset managers.</td>
-            <td><a class="source-link" href="https://seic.com/sei-trust-company/about-sei-trust-company" target="_blank">SEI About page</a>: &ldquo;provides trustee, custodial, operational and administrative services.&rdquo; No external custodian named in reviewed public filings.<span class="last-verified">Last verified: 2026-04-06</span></td>
-          </tr>
-
-          <!-- Row 3: GTC (dynamic custodian breakdown from Schedule C) -->
-          <tr id="gtc-row">
-            <td class="fund-name">Global Trust Company<br><span style="font-size:11px;color:var(--muted);font-weight:400">(GTC / BPAS)</span></td>
-            <td id="gtc-custodian-cell">
-              <span style="font-size:12px;color:var(--muted)">Loading from Schedule C...</span>
-            </td>
-            <td><span class="badge badge-5500">5500-derived</span></td>
-            <td class="fee-cell">~$100B</td>
-            <td class="fee-cell" style="color:var(--muted)">Not disclosed</td>
-            <td class="td-split">Both TD and non-TD. TD: State Street GTC Retirement Income Builder co-branded series. Non-TD: large institutional mandates for asset managers.</td>
-            <td><a class="source-link" href="https://retirementincomejournal.com/wp-content/uploads/2024/04/GTC-State-Street-Retirement-Income-Builder-Series-I-Offering-Memorandum-January-05-2024.pdf" target="_blank">GTC Retirement Income Builder Offering Memo (Jan 2024)</a>; DOL Form 5500 Schedule C, GTC EINs 263761443 &amp; 367634097</td>
-          </tr>
-
-          <!-- Section: Investment Manager Proprietary Trust Companies -->
-          <tr><td colspan="7" class="cust-section-label">Investment Manager Proprietary Trust Companies</td></tr>
-
-          <!-- Row 4: BNY -->
-          <tr>
-            <td class="fund-name">BNY Investments<br><span style="font-size:11px;color:var(--muted);font-weight:400">(BNY as trustee)</span></td>
-            <td>BNY<br><span style="font-size:11px;color:var(--muted)">(self-custody)</span></td>
-            <td><span class="badge badge-confirmed">Confirmed</span></td>
-            <td class="fee-cell" style="color:var(--muted)">Not disclosed</td>
-            <td class="fee-cell" style="color:var(--muted)">Not disclosed</td>
-            <td class="td-split">Primarily institutional strategies. No public TD market share data for BNY as trustee.</td>
-            <td><a class="source-link" href="https://bny.com/investments/us/en/institutional/collective-investment-trusts.html" target="_blank">BNY CIT page</a>: &ldquo;CITs are custodied at and unitized by BNY Asset Servicing.&rdquo;<span class="last-verified">Last verified: 2026-04-06</span></td>
-          </tr>
-
-          <!-- Row 5: BlackRock -->
-          <tr>
-            <td class="fund-name">BlackRock Institutional Trust Company</td>
-            <td>JPMorgan Chase + BNY Mellon</td>
-            <td><span class="badge badge-confirmed">Confirmed</span></td>
-            <td class="fee-cell">~$257B</td>
-            <td class="fee-cell" style="color:var(--muted)">Not disclosed</td>
-            <td class="td-split">TD-heavy &mdash; LifePath Index and LifePath Dynamic CIT series. Non-TD index and active strategies also offered.</td>
-            <td><a class="source-link" href="https://www.sec.gov/Archives/edgar/data/0000844779/000119312517201568/d410502d497.htm" target="_blank">BlackRock Funds SEC Form 497, Jun 2017</a>; CIT TD AUM: P&amp;I DC Survey, Oct 2024<span class="last-verified">Last verified: 2026-04-06</span></td>
-          </tr>
-
-          <!-- Row 6: Vanguard -->
-          <tr>
-            <td class="fund-name">Vanguard Fiduciary Trust Company</td>
-            <td>State Street</td>
-            <td><span class="badge badge-confirmed">Confirmed</span></td>
-            <td class="fee-cell">~$555B</td>
-            <td class="fee-cell" style="color:var(--muted)">Not disclosed</td>
-            <td class="td-split">TD dominant &mdash; 38% of CIT TD market. Target Retirement Trust series. Also offers large non-TD index trusts (500 Index, Total Stock Market, bond trusts).</td>
-            <td><a class="source-link" href="https://workplace.vanguard.com/content/dam/inst/iig-transformation/trust-financial-documents/Russell_1000_Value_Index_Trust.pdf" target="_blank">VFTC fund financials</a>; Global Custodian (2021) &mdash; Vanguard moved $1T+ from BBH to State Street in 2018. P&amp;I DC Survey, Oct 2024 for AUM.<span class="last-verified">Last verified: 2026-04-06</span></td>
-          </tr>
-
-          <!-- Row 7: T. Rowe Price -->
-          <tr>
-            <td class="fund-name">T. Rowe Price Trust Company</td>
-            <td>State Street</td>
-            <td><span class="badge badge-confirmed">Confirmed</span></td>
-            <td class="fee-cell">~$283B</td>
-            <td class="fee-cell" style="color:var(--muted)">Not disclosed</td>
-            <td class="td-split">TD-heavy &mdash; 14% of CIT TD market. T. Rowe Price Retirement series CIT. Non-TD equity and fixed income CITs also offered.</td>
-            <td><a class="source-link" href="https://www.sec.gov/Archives/edgar/data/0000858581/000174177323003372/ex99gcustagreemt-cust1.htm" target="_blank">T. Rowe Price Index Trust SEC 485BPOS, Custodian Agreement (2023)</a>. Standing agreement with State Street dated Jan 28, 1998. Market share: Morningstar via PlanSponsor (2026), applied to $2.02T total (PSCA, Jan 2025).<span class="last-verified">Last verified: 2026-04-06</span></td>
-          </tr>
-
-          <!-- Row 8: Fidelity -->
-          <tr>
-            <td class="fund-name">Fidelity Management Trust Company</td>
-            <td>Multiple / self-custody<br><span style="font-size:11px;color:var(--muted)">(unconfirmed at CIT level)</span></td>
-            <td><span class="badge badge-partial">Partial</span></td>
-            <td class="fee-cell">~$162B</td>
-            <td class="fee-cell" style="color:var(--muted)">Not disclosed</td>
-            <td class="td-split">TD significant &mdash; 8% of CIT TD market. Freedom Index CIT and Freedom CIT series. Non-TD equity and bond CITs also offered.</td>
-            <td>FMTC is a Mass.-chartered bank with its own custody authority. No single public source naming custodian across the CIT book &mdash; fund-level research required. Market share: Morningstar via PlanSponsor (2026).<span class="last-verified">Last verified: 2026-04-06</span></td>
-          </tr>
+        <tbody id="cust-tbody">
+          <tr><td colspan="7" style="text-align:center;color:var(--muted);padding:2rem">Loading reference data...</td></tr>
         </tbody>
       </table>
     </div>
 
     <div class="cust-note">
-      <strong>Notes:</strong> AUM figures reflect CIT assets only. CIT TD AUM estimates for manager-owned trust companies apply Morningstar 2026 market share percentages to the $2.02T total CIT TD market (PSCA, Jan 2025). GTC custodian breakdown is derived from 35 GTC-trusteed plans in 2023 Form 5500 Schedule C data &mdash; 12 of 35 plans carry an explicit custodian label. Great Gray&rsquo;s $210B reflects the combined entity post-MDP/Wilmington Trust merger.
+      <strong>Notes:</strong> AUM figures reflect CIT assets only. CIT TD AUM estimates for manager-owned trust companies apply Morningstar 2026 market share percentages to the $2.02T total CIT TD market (PSCA, Jan 2025). GTC custodian breakdown is derived from Form 5500 Schedule C data. Great Gray's $210B reflects the combined entity post-MDP/Wilmington Trust merger.
     </div>
 
   </div><!-- /tab-custodians -->
@@ -1059,19 +966,20 @@ async function loadSummary() {
       </div>
     `;
 
-    // Ranking tables — trustees, custodians (reference), then administrators
-    const custodianRef = [
-      { name: 'State Street', count: '2+ major', net_assets: 853e9, total_expenses: 0 },
-      { name: 'BNY Mellon', count: '2+ major', net_assets: 217e9, total_expenses: 0 },
-      { name: 'Northern Trust', count: '1 major', net_assets: 215e9, total_expenses: 0 },
-      { name: 'SEI (self-custody)', count: '1 (SEI)', net_assets: 200e9, total_expenses: 0 },
-      { name: 'JPMorgan Chase', count: '1+ major', net_assets: 140e9, total_expenses: 0 },
-      { name: 'M&T Bank', count: 'GTC plans', net_assets: 25e9, total_expenses: 0 },
-    ];
+    // Ranking tables — trustees, then custodian banks (expandable), then administrators
+    // Fetch custodian reference data for the expandable table
+    let custBankHtml = '';
+    try {
+      const custRes = await fetch(`${API}/api/custodian-reference`);
+      const custData = await custRes.json();
+      if (custData.custodian_banks) {
+        custBankHtml = renderCustodianSummaryCard(custData.custodian_banks);
+      }
+    } catch (e) {}
 
     $('summary-grid').innerHTML =
       renderRankCard('Top Trustees by Net Assets', data.top_trustees) +
-      renderRankCardStatic('Top Custodian Banks by Est. CIT AUM', custodianRef) +
+      custBankHtml +
       renderRankCard('Top Administrators by Net Assets', data.top_administrators);
 
   } catch (e) {
@@ -1198,82 +1106,188 @@ function makePie(canvasId, labels, data) {
   });
 }
 
-// ── GTC dynamic custodian breakdown ────────────────────────────────────────
+// ── Load all custodian data from API ───────────────────────────────────────
+let _custRefData = null;
+
 async function loadGtcCustodians() {
+  // Now handled by loadCustodianCharts
+}
+
+async function loadCustodianCharts() {
   try {
-    const res  = await fetch(`${API}/api/gtc-custodians`);
-    const data = await res.json();
-    if (data.error) return;
+    const [refRes, sumRes] = await Promise.all([
+      fetch(`${API}/api/custodian-reference`),
+      fetch(`${API}/api/summary`),
+    ]);
+    const ref = await refRes.json();
+    const summary = await sumRes.json();
+    _custRefData = ref;
 
-    const gtc = data.gtc_breakdown;
-    const year = data.data_year || '2023';
-
+    const year = ref.data_year || '2023';
     $('custodian-data-year').textContent =
       `Schedule C source: ${year} Form 5500 (latest complete year)`;
 
-    const cell = $('gtc-custodian-cell');
-    if (!gtc || !gtc.buckets || gtc.buckets.length === 0) {
-      cell.innerHTML = '<span style="color:var(--muted)">No custodian data found in Schedule C</span>';
-      return;
-    }
+    // ── Render trustee reference table ──
+    renderCustodianTable(ref);
 
-    const maxCount = Math.max(...gtc.buckets.map(b => b.count));
-    const barsHtml = gtc.buckets.map(b => {
-      const w = Math.max(12, Math.round((b.count / maxCount) * 100));
-      return `<li><span class="cust-bar-label">${b.count}</span><div class="cust-bar" style="width:${w}px"></div> ${b.name}</li>`;
-    }).join('');
-
-    cell.innerHTML = `
-      <span style="font-size:12px;font-weight:500">Multi-custodian, client-driven</span>
-      <ul class="cust-breakdown">${barsHtml}</ul>
-      <span style="font-size:10px;color:var(--muted)">From ${gtc.total_plans} sampled plans, ${gtc.plans_with_custodian} with explicit custodian</span>
-    `;
-  } catch (e) {}
-}
-
-// ── Custodian tab pie charts ───────────────────────────────────────────────
-async function loadCustodianCharts() {
-  // Chart 1: CIT AUM by Investment Manager (live from DOL summary)
-  try {
-    const res = await fetch(`${API}/api/summary`);
-    const s = await res.json();
-    if (!s.error && s.top_trustees) {
-      const top = s.top_trustees.slice(0, 6);
-      const otherAum = s.top_trustees.slice(6).reduce((sum, t) => sum + t.net_assets, 0);
+    // ── Chart 1: CIT AUM by Investment Manager (DOL data) ──
+    if (!summary.error && summary.top_trustees) {
+      const top = summary.top_trustees.slice(0, 6);
+      const otherAum = summary.top_trustees.slice(6).reduce((s, t) => s + t.net_assets, 0);
       const labels = top.map(t => t.name);
       const data   = top.map(t => t.net_assets);
       if (otherAum > 0) { labels.push('Other'); data.push(otherAum); }
       makePie('chart-by-manager', labels, data);
     }
-  } catch (e) {}
 
-  // Chart 2: CIT AUM by Trustee Type (reference data)
-  const tpAum   = 210e9 + 200e9 + 100e9 + 50e9;              // Great Gray + SEI + GTC + other
-  const propAum = 555e9 + 283e9 + 257e9 + 162e9 + 80e9 + 120e9; // Vanguard + TRP + BLK + Fid + BNY + other
-  makePie('chart-by-trustee-type',
-    ['Third-party / White-label ($560B)', 'Manager Proprietary ($1.46T)'],
-    [tpAum, propAum]
-  );
+    // ── Chart 2: Trustee Type (from API reference) ──
+    let tpAum = 0, propAum = 0;
+    for (const t of ref.trustees) {
+      const aum = parseRefAum(t.aum);
+      if (t.type === 'third-party') tpAum += aum; else propAum += aum;
+    }
+    // Add estimated "other" not in our list
+    tpAum += 50e9; propAum += 120e9;
+    makePie('chart-by-trustee-type',
+      ['Third-party / White-label', 'Manager Proprietary'],
+      [tpAum, propAum]
+    );
 
-  // Chart 3: CIT AUM by Custodian Bank — top 6 + Other
-  makePie('chart-by-custodian',
-    ['State Street', 'BNY Mellon', 'Northern Trust', 'SEI (self-custody)', 'JPMorgan Chase', 'Other'],
-    [853e9, 217e9, 215e9, 200e9, 140e9, 372e9]
-  );
-  // State Street: Vanguard $555B + TRP $283B + GTC $15B
-  // BNY Mellon: BlackRock split ~$127B + BNY self ~$80B + GTC $10B
-  // Northern Trust: Great Gray $210B + GTC $5B
-  // SEI: self-custody $200B
-  // JPMorgan: BlackRock split ~$130B + GTC $10B
-  // Other: M&T $25B + Fidelity $162B + remaining $185B
-  // Multiple/Unknown: Fidelity $162B + other $185B
+    // ── Chart 3: Custodian Bank (from API reference, top 6) ──
+    const banks = ref.custodian_banks.slice(0, 6);
+    const bankOther = ref.custodian_banks.slice(6).reduce((s, b) => s + b.est_aum, 0) + 347e9;
+    const bLabels = banks.map(b => b.name);
+    const bData = banks.map(b => b.est_aum);
+    bLabels.push('Other'); bData.push(bankOther);
+    makePie('chart-by-custodian', bLabels, bData);
 
-  // Chart 4: Target Date vs Non-Target Date (PSCA Jan 2025 + industry est.)
-  makePie('chart-td-split',
-    ['Target Date CITs ($2.02T)', 'Non-Target Date CITs ($2.58T)'],
-    [2.02e12, 2.58e12]
-  );
-  // Total CIT market ~$4.6T est.; TD = $2.02T per PSCA Jan 2025
+    // ── Chart 4: TD vs Non-TD ──
+    makePie('chart-td-split',
+      ['Target Date CITs ($2.02T)', 'Non-Target Date CITs ($2.58T)'],
+      [2.02e12, 2.58e12]
+    );
+
+  } catch (e) { console.error('Custodian chart load error:', e); }
+}
+
+function parseRefAum(s) {
+  if (!s || s === 'Not disclosed') return 0;
+  const m = s.match(/([\d.]+)/);
+  if (!m) return 0;
+  const n = parseFloat(m[1]);
+  if (s.includes('T')) return n * 1e12;
+  return n * 1e9;
+}
+
+const BADGE_MAP = {
+  'confirmed': '<span class="badge badge-confirmed">Confirmed</span>',
+  'self-reported': '<span class="badge badge-self">Self-reported</span>',
+  '5500-derived': '<span class="badge badge-5500">5500-derived</span>',
+  'partial': '<span class="badge badge-partial">Partial</span>',
+};
+
+function renderCustodianTable(ref) {
+  const gtc = ref.gtc_breakdown || {};
+  const tbody = $('cust-tbody');
+  let html = '';
+
+  // Group by type
+  const thirdParty = ref.trustees.filter(t => t.type === 'third-party');
+  const proprietary = ref.trustees.filter(t => t.type === 'proprietary');
+
+  html += '<tr><td colspan="7" class="cust-section-label">White-label / Third-party Trustees</td></tr>';
+  for (const t of thirdParty) html += renderTrusteeRow(t, gtc);
+
+  html += '<tr><td colspan="7" class="cust-section-label">Investment Manager Proprietary Trust Companies</td></tr>';
+  for (const t of proprietary) html += renderTrusteeRow(t, gtc);
+
+  tbody.innerHTML = html;
+  $('cust-count').textContent = ref.trustees.length + ' trustees';
+}
+
+function renderTrusteeRow(t, gtc) {
+  const nameHtml = t.subtitle
+    ? `${t.name}<br><span style="font-size:11px;color:var(--muted);font-weight:400">(${t.subtitle})</span>`
+    : t.name;
+
+  let custHtml;
+  if (t.custodian === 'DYNAMIC' && gtc.buckets?.length) {
+    const maxC = Math.max(...gtc.buckets.map(b => b.count));
+    const bars = gtc.buckets.map(b => {
+      const w = Math.max(12, Math.round((b.count / maxC) * 100));
+      return `<li><span class="cust-bar-label">${b.count}</span><div class="cust-bar" style="width:${w}px"></div> ${b.name}</li>`;
+    }).join('');
+    custHtml = `<span style="font-size:12px;font-weight:500">Multi-custodian, client-driven</span>
+      <ul class="cust-breakdown">${bars}</ul>
+      <span style="font-size:10px;color:var(--muted)">From ${gtc.total_plans} plans, ${gtc.plans_with_custodian} with explicit custodian</span>`;
+  } else {
+    custHtml = t.custodian;
+    if (t.custodian_note) custHtml += `<br><span style="font-size:11px;color:var(--muted)">(${t.custodian_note})</span>`;
+  }
+
+  const srcHtml = t.source_url
+    ? `<a class="source-link" href="${t.source_url}" target="_blank">${t.source}</a>`
+    : t.source;
+
+  const aumStyle = (t.aum === 'Not disclosed') ? ' style="color:var(--muted)"' : '';
+  const fundsStyle = (t.funds === 'Not disclosed') ? ' style="color:var(--muted)"' : '';
+
+  return `<tr>
+    <td class="fund-name">${nameHtml}</td>
+    <td>${custHtml}</td>
+    <td>${BADGE_MAP[t.confidence] || t.confidence}</td>
+    <td class="fee-cell"${aumStyle}>${t.aum}</td>
+    <td class="fee-cell"${fundsStyle}>${t.funds}</td>
+    <td class="td-split">${t.td_split}</td>
+    <td>${srcHtml}<span class="last-verified">Last verified: ${t.last_verified}</span></td>
+  </tr>`;
+}
+
+// ── Market Summary: expandable custodian bank table ────────────────────────
+function renderCustodianSummaryCard(banks) {
+  const rows = banks.map((b, i) => {
+    const clientRows = b.clients.map(c => {
+      const srcLink = c.source_url
+        ? `<a class="source-link" href="${c.source_url}" target="_blank">${c.source}</a>`
+        : `<span style="color:var(--muted)">${c.source}</span>`;
+      return `<tr class="expand-row expand-${i}" style="display:none;background:#faf9f6">
+        <td></td>
+        <td style="padding-left:24px;font-size:12px">${c.trustee}</td>
+        <td class="num">${fmt$(c.aum)}</td>
+        <td style="font-size:11px">${srcLink}</td>
+      </tr>`;
+    }).join('');
+
+    return `<tr style="cursor:pointer" onclick="toggleExpand(${i})">
+      <td class="rank">${i + 1}</td>
+      <td class="entity">${b.name} <span style="font-size:10px;color:var(--accent)" id="expand-icon-${i}">+ ${b.clients.length} clients</span></td>
+      <td class="num">${fmt$(b.est_aum)}</td>
+      <td></td>
+    </tr>${clientRows}`;
+  }).join('');
+
+  return `<div class="summary-card" style="grid-column:1/-1">
+    <h3>Top Custodian Banks by Est. CIT AUM <span style="font-weight:400;text-transform:none;letter-spacing:0">(click row to expand clients)</span></h3>
+    <table>
+      <thead><tr>
+        <th style="width:30px">#</th>
+        <th>Custodian Bank</th>
+        <th style="text-align:right">Est. CIT AUM</th>
+        <th>Source</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  </div>`;
+}
+
+function toggleExpand(idx) {
+  const rows = document.querySelectorAll(`.expand-${idx}`);
+  const icon = $(`expand-icon-${idx}`);
+  const visible = rows[0]?.style.display !== 'none';
+  rows.forEach(r => r.style.display = visible ? 'none' : 'table-row');
+  if (icon) icon.textContent = visible
+    ? `+ ${rows.length} clients`
+    : `- ${rows.length} clients`;
 }
 </script>
 </body>

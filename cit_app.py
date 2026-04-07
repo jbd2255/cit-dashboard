@@ -104,6 +104,179 @@ def _find_col(df: pd.DataFrame, candidates: list) -> str | None:
 
 
 # ---------------------------------------------------------------------------
+# Custodian reference data (from audited financials, SEC filings, DOL)
+# ---------------------------------------------------------------------------
+CUSTODIAN_REFERENCE = {
+    "custodian_banks": [
+        {
+            "name": "State Street",
+            "est_aum": 853e9,
+            "clients": [
+                {"trustee": "Vanguard Fiduciary Trust Company", "aum": 555e9,
+                 "source": "VFTC fund financials; Global Custodian (2021)",
+                 "source_url": "https://workplace.vanguard.com/content/dam/inst/iig-transformation/trust-financial-documents/Russell_1000_Value_Index_Trust.pdf"},
+                {"trustee": "T. Rowe Price Trust Company", "aum": 283e9,
+                 "source": "T. Rowe Price Index Trust SEC 485BPOS, Custodian Agreement (2023)",
+                 "source_url": "https://www.sec.gov/Archives/edgar/data/0000858581/000174177323003372/ex99gcustagreemt-cust1.htm"},
+                {"trustee": "Global Trust Company (partial)", "aum": 15e9,
+                 "source": "DOL Form 5500 Schedule C", "source_url": None},
+            ],
+        },
+        {
+            "name": "BNY Mellon",
+            "est_aum": 217e9,
+            "clients": [
+                {"trustee": "BlackRock Institutional Trust Co. (partial)", "aum": 127e9,
+                 "source": "BlackRock Funds SEC Form 497, Jun 2017",
+                 "source_url": "https://www.sec.gov/Archives/edgar/data/0000844779/000119312517201568/d410502d497.htm"},
+                {"trustee": "BNY Investments (self)", "aum": 80e9,
+                 "source": "BNY CIT page",
+                 "source_url": "https://bny.com/investments/us/en/institutional/collective-investment-trusts.html"},
+                {"trustee": "Global Trust Company (partial)", "aum": 10e9,
+                 "source": "DOL Form 5500 Schedule C", "source_url": None},
+            ],
+        },
+        {
+            "name": "Northern Trust",
+            "est_aum": 215e9,
+            "clients": [
+                {"trustee": "Great Gray Trust Company", "aum": 210e9,
+                 "source": "BlackRock LifePath Dynamic Fund Series 2024 Annual Report (PwC-audited)",
+                 "source_url": "https://greatgray.com/wp-content/uploads/2025/05/0.96-BlackRock-LifePath-Dynamic-Funds-2024-Final.pdf"},
+                {"trustee": "Global Trust Company (partial)", "aum": 5e9,
+                 "source": "DOL Form 5500 Schedule C", "source_url": None},
+            ],
+        },
+        {
+            "name": "SEI (self-custody)",
+            "est_aum": 200e9,
+            "clients": [
+                {"trustee": "SEI Trust Company (self)", "aum": 200e9,
+                 "source": "SEI About page",
+                 "source_url": "https://seic.com/sei-trust-company/about-sei-trust-company"},
+            ],
+        },
+        {
+            "name": "JPMorgan Chase",
+            "est_aum": 140e9,
+            "clients": [
+                {"trustee": "BlackRock Institutional Trust Co. (partial)", "aum": 130e9,
+                 "source": "BlackRock Funds SEC Form 497, Jun 2017",
+                 "source_url": "https://www.sec.gov/Archives/edgar/data/0000844779/000119312517201568/d410502d497.htm"},
+                {"trustee": "Global Trust Company (partial)", "aum": 10e9,
+                 "source": "DOL Form 5500 Schedule C", "source_url": None},
+            ],
+        },
+        {
+            "name": "M&T Bank",
+            "est_aum": 25e9,
+            "clients": [
+                {"trustee": "Global Trust Company (partial)", "aum": 25e9,
+                 "source": "DOL Form 5500 Schedule C", "source_url": None},
+            ],
+        },
+    ],
+    "trustees": [
+        {
+            "name": "Great Gray Trust Company",
+            "subtitle": "incl. former Wilmington Trust CIT -- both now under MDP",
+            "type": "third-party",
+            "custodian": "Northern Trust",
+            "custodian_note": "also provides TA and fund accounting",
+            "confidence": "confirmed",
+            "aum": "$210B+", "funds": "770+",
+            "td_split": "Large TD presence -- 18 co-manufactured TD series ($36B in that subset as of Jun 2024). Majority of fund count is single-strategy non-TD.",
+            "source": "BlackRock LifePath Dynamic Fund Series 2024 Annual Report, Note 1 (PwC-audited)",
+            "source_url": "https://greatgray.com/wp-content/uploads/2025/05/0.96-BlackRock-LifePath-Dynamic-Funds-2024-Final.pdf",
+            "last_verified": "2026-04-06",
+        },
+        {
+            "name": "SEI Trust Company",
+            "type": "third-party",
+            "custodian": "SEI",
+            "custodian_note": "self-custody -- in-house platform",
+            "confidence": "self-reported",
+            "aum": "$200B+", "funds": "570+",
+            "td_split": "Predominantly non-TD. Single-manager strategies across 167+ asset managers.",
+            "source": "SEI About page: provides trustee, custodial, operational and administrative services.",
+            "source_url": "https://seic.com/sei-trust-company/about-sei-trust-company",
+            "last_verified": "2026-04-06",
+        },
+        {
+            "name": "Global Trust Company",
+            "subtitle": "GTC / BPAS",
+            "type": "third-party",
+            "custodian": "DYNAMIC",
+            "confidence": "5500-derived",
+            "aum": "~$100B", "funds": "Not disclosed",
+            "td_split": "Both TD and non-TD. TD: State Street GTC Retirement Income Builder co-branded series. Non-TD: large institutional mandates for asset managers.",
+            "source": "GTC Retirement Income Builder Offering Memo (Jan 2024); DOL Form 5500 Schedule C, GTC EINs 263761443 & 367634097",
+            "source_url": "https://retirementincomejournal.com/wp-content/uploads/2024/04/GTC-State-Street-Retirement-Income-Builder-Series-I-Offering-Memorandum-January-05-2024.pdf",
+            "last_verified": "2026-04-06",
+        },
+        {
+            "name": "BNY Investments",
+            "subtitle": "BNY as trustee",
+            "type": "proprietary",
+            "custodian": "BNY",
+            "custodian_note": "self-custody",
+            "confidence": "confirmed",
+            "aum": "Not disclosed", "funds": "Not disclosed",
+            "td_split": "Primarily institutional strategies. No public TD market share data for BNY as trustee.",
+            "source": "BNY CIT page: CITs are custodied at and unitized by BNY Asset Servicing.",
+            "source_url": "https://bny.com/investments/us/en/institutional/collective-investment-trusts.html",
+            "last_verified": "2026-04-06",
+        },
+        {
+            "name": "BlackRock Institutional Trust Company",
+            "type": "proprietary",
+            "custodian": "JPMorgan Chase + BNY Mellon",
+            "confidence": "confirmed",
+            "aum": "~$257B", "funds": "Not disclosed",
+            "td_split": "TD-heavy -- LifePath Index and LifePath Dynamic CIT series. Non-TD index and active strategies also offered.",
+            "source": "BlackRock Funds SEC Form 497, Jun 2017; CIT TD AUM: P&I DC Survey, Oct 2024",
+            "source_url": "https://www.sec.gov/Archives/edgar/data/0000844779/000119312517201568/d410502d497.htm",
+            "last_verified": "2026-04-06",
+        },
+        {
+            "name": "Vanguard Fiduciary Trust Company",
+            "type": "proprietary",
+            "custodian": "State Street",
+            "confidence": "confirmed",
+            "aum": "~$555B", "funds": "Not disclosed",
+            "td_split": "TD dominant -- 38% of CIT TD market. Target Retirement Trust series. Also offers large non-TD index trusts.",
+            "source": "VFTC fund financials; Global Custodian (2021) -- moved $1T+ from BBH to State Street in 2018. P&I DC Survey, Oct 2024.",
+            "source_url": "https://workplace.vanguard.com/content/dam/inst/iig-transformation/trust-financial-documents/Russell_1000_Value_Index_Trust.pdf",
+            "last_verified": "2026-04-06",
+        },
+        {
+            "name": "T. Rowe Price Trust Company",
+            "type": "proprietary",
+            "custodian": "State Street",
+            "confidence": "confirmed",
+            "aum": "~$283B", "funds": "Not disclosed",
+            "td_split": "TD-heavy -- 14% of CIT TD market. T. Rowe Price Retirement series CIT. Non-TD equity and fixed income CITs.",
+            "source": "SEC 485BPOS Custodian Agreement (2023). Standing agreement with State Street dated Jan 28, 1998. Market share: Morningstar via PlanSponsor (2026).",
+            "source_url": "https://www.sec.gov/Archives/edgar/data/0000858581/000174177323003372/ex99gcustagreemt-cust1.htm",
+            "last_verified": "2026-04-06",
+        },
+        {
+            "name": "Fidelity Management Trust Company",
+            "type": "proprietary",
+            "custodian": "Multiple / self-custody",
+            "custodian_note": "unconfirmed at CIT level",
+            "confidence": "partial",
+            "aum": "~$162B", "funds": "Not disclosed",
+            "td_split": "TD significant -- 8% of CIT TD market. Freedom Index CIT and Freedom CIT series. Non-TD equity and bond CITs.",
+            "source": "FMTC is a Mass.-chartered bank with custody authority. No single public source naming custodian. Market share: Morningstar via PlanSponsor (2026).",
+            "source_url": None,
+            "last_verified": "2026-04-06",
+        },
+    ],
+}
+
+
+# ---------------------------------------------------------------------------
 # GTC custodian breakdown from Schedule C
 # ---------------------------------------------------------------------------
 GTC_EINS = {"263761443", "367634097"}
@@ -603,6 +776,21 @@ def gtc_custodians():
         return jsonify({"error": "Data loading" if loading else "Data not loaded"}), 503
 
     return jsonify({"gtc_breakdown": gtc, "data_year": year})
+
+
+@app.route("/api/custodian-reference")
+def custodian_reference():
+    """Return full custodian reference data including GTC dynamic breakdown."""
+    with _lock:
+        gtc  = _data.get("gtc_breakdown", {})
+        year = _data.get("data_year", "2023")
+
+    return jsonify({
+        "custodian_banks": CUSTODIAN_REFERENCE["custodian_banks"],
+        "trustees": CUSTODIAN_REFERENCE["trustees"],
+        "gtc_breakdown": gtc,
+        "data_year": year,
+    })
 
 
 @app.route("/api/provider-search")
