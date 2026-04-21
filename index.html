@@ -180,6 +180,23 @@
   .search-row button:active { transform: scale(0.98); }
   .search-row button:disabled { background: #aaa; cursor: default; }
 
+  .export-btn {
+    padding: 7px 14px;
+    background: var(--surface);
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    border-radius: var(--radius);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    letter-spacing: 0.04em;
+    transition: background 0.15s, color 0.15s;
+    white-space: nowrap;
+  }
+  .export-btn:hover  { background: var(--accent-light); }
+  .export-btn:active { transform: scale(0.98); }
+
   .hint {
     margin-top: 0.6rem;
     font-size: 12px;
@@ -587,6 +604,11 @@
           <option value="trustee">Trustee</option>
           <option value="administrator">Administrator</option>
         </select>
+        <select id="dol-fund-type">
+          <option value="">All funds</option>
+          <option value="target">Target date only</option>
+          <option value="non-target">Non-target date only</option>
+        </select>
         <button id="dol-btn" onclick="runDolSearch()">Search DOL Data</button>
       </div>
       <div class="hint">
@@ -605,8 +627,11 @@
 
     <div id="dol-results">
       <div class="results-header">
-        <span class="results-title" id="dol-rtitle"></span>
-        <span class="count-badge"   id="dol-rcount"></span>
+        <div style="display:flex;align-items:baseline;gap:10px">
+          <span class="results-title" id="dol-rtitle"></span>
+          <span class="count-badge"   id="dol-rcount"></span>
+        </div>
+        <button class="export-btn" id="dol-export" onclick="exportDolCsv()" style="display:none">Export CSV</button>
       </div>
       <div class="legend" id="dol-legend-plan">
         <div class="legend-item"><div class="legend-dot" style="background:#9fd3d3"></div>Trustee</div>
@@ -774,6 +799,27 @@ async function refreshDolBanner() {
 refreshDolBanner();
 
 // ── DOL search ─────────────────────────────────────────────────────────────
+const TD_PATTERNS = [
+  'target date', 'target-date', 'retirement 20', 'retirement income',
+  'lifepath', 'target retirement', 'in-retirement', 'glidepath', 'glide path',
+  '2020', '2025', '2030', '2035', '2040', '2045', '2050', '2055', '2060', '2065', '2070',
+];
+
+function isTargetDate(name) {
+  if (!name) return false;
+  const s = String(name).toLowerCase();
+  return TD_PATTERNS.some(p => s.includes(p));
+}
+
+function applyFundTypeFilter(results) {
+  const ft = $('dol-fund-type').value;
+  if (!ft) return results;
+  return results.filter(r => {
+    const td = isTargetDate(r.plan_name);
+    return ft === 'target' ? td : !td;
+  });
+}
+
 function updateDolLabel() {
   const mode = document.querySelector('input[name="dol-mode"]:checked').value;
   $('dol-input-label').textContent = mode === 'plan'
@@ -805,6 +851,7 @@ async function runDolSearch() {
 
   hideDolErr();
   $('dol-results').style.display = 'none';
+  $('dol-export').style.display = 'none';
   $('dol-btn').disabled = true;
   setDolStatus('Searching DOL Form 5500 data…', true);
 
@@ -829,14 +876,23 @@ async function runDolSearch() {
       return;
     }
 
-    if (mode === 'plan') {
-      renderDolPlanTable(q, data);
-    } else {
-      renderDolProviderTable(q, data);
+    const filtered = applyFundTypeFilter(data.results);
+    if (!filtered.length) {
+      setDolStatus('No CIT filings matched your filters.');
+      $('dol-btn').disabled = false;
+      return;
     }
 
-    setDolStatus(`${data.results.length} result${data.results.length !== 1 ? 's' : ''}` +
-      (data.total > data.results.length ? ` (of ${data.total.toLocaleString()} total)` : '') +
+    if (mode === 'plan') {
+      renderDolPlanTable(q, filtered);
+    } else {
+      renderDolProviderTable(q, filtered);
+    }
+
+    $('dol-export').style.display = 'inline-block';
+
+    setDolStatus(`${filtered.length} result${filtered.length !== 1 ? 's' : ''}` +
+      (data.total > filtered.length ? ` (of ${data.total.toLocaleString()} total)` : '') +
       ' · DOL Form 5500 2023');
 
   } catch (e) {
@@ -846,9 +902,9 @@ async function runDolSearch() {
   $('dol-btn').disabled = false;
 }
 
-function renderDolPlanTable(q, data) {
+function renderDolPlanTable(q, results) {
   $('dol-rtitle').textContent = `CIT results for "${q}"`;
-  $('dol-rcount').textContent = data.results.length + ' filing' + (data.results.length !== 1 ? 's' : '');
+  $('dol-rcount').textContent = results.length + ' filing' + (results.length !== 1 ? 's' : '');
   $('dol-legend-plan').style.display     = 'flex';
   $('dol-legend-provider').style.display = 'none';
 
@@ -865,11 +921,17 @@ function renderDolPlanTable(q, data) {
     <th style="text-align:right">Net assets</th>
   </tr>`;
 
-  const t = data.totals || {};
+  const t = {
+    trustee_fees:    results.reduce((s, r) => s + (r.trustee_fees    || 0), 0),
+    invst_mgmt_fees: results.reduce((s, r) => s + (r.invst_mgmt_fees || 0), 0),
+    admin_fees:      results.reduce((s, r) => s + (r.admin_fees      || 0), 0),
+    total_expenses:  results.reduce((s, r) => s + (r.total_expenses  || 0), 0),
+    net_assets:      results.reduce((s, r) => s + (r.net_assets      || 0), 0),
+  };
   const totalsRow = `
     <tr style="background:#f0ede6;font-weight:600;border-bottom:2px solid var(--border-strong)">
       <td colspan="5" style="font-family:'IBM Plex Mono',monospace;font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted)">
-        Totals (${data.results.length} filings)
+        Totals (${results.length} filings)
       </td>
       <td class="fee-cell" style="font-weight:600">${fmt$(t.trustee_fees)}</td>
       <td class="fee-cell" style="font-weight:600">${fmt$(t.invst_mgmt_fees)}</td>
@@ -878,7 +940,7 @@ function renderDolPlanTable(q, data) {
       <td class="fee-cell" style="font-weight:600">${fmt$(t.net_assets)}</td>
     </tr>`;
 
-  $('dol-tbody').innerHTML = totalsRow + data.results.map(r => `
+  $('dol-tbody').innerHTML = totalsRow + results.map(r => `
     <tr>
       <td class="fund-name">${r.plan_name || '—'}</td>
       <td style="max-width:200px;line-height:1.4">${r.sponsor_name || '—'}</td>
@@ -896,9 +958,9 @@ function renderDolPlanTable(q, data) {
   $('dol-results').style.display = 'block';
 }
 
-function renderDolProviderTable(q, data) {
+function renderDolProviderTable(q, results) {
   $('dol-rtitle').textContent = `CITs using "${q}"`;
-  $('dol-rcount').textContent = data.results.length + ' row' + (data.results.length !== 1 ? 's' : '');
+  $('dol-rcount').textContent = results.length + ' row' + (results.length !== 1 ? 's' : '');
   $('dol-legend-plan').style.display     = 'none';
   $('dol-legend-provider').style.display = 'flex';
 
@@ -909,7 +971,7 @@ function renderDolProviderTable(q, data) {
     <th style="text-align:right">Fee paid</th>
   </tr>`;
 
-  $('dol-tbody').innerHTML = data.results.map(r => `
+  $('dol-tbody').innerHTML = results.map(r => `
     <tr>
       <td class="fund-name">${r.plan_name || '—'}</td>
       <td>${r.provider_name || '—'}</td>
@@ -919,6 +981,55 @@ function renderDolProviderTable(q, data) {
   `).join('');
 
   $('dol-results').style.display = 'block';
+}
+
+// ── CSV export ─────────────────────────────────────────────────────────────
+function csvEscape(v) {
+  const s = String(v ?? '');
+  return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+
+function cellText(td) {
+  return td.textContent.replace(/\s+/g, ' ').trim();
+}
+
+function exportDolCsv() {
+  const table = $('dol-table');
+  const headerCells = Array.from(table.querySelectorAll('thead th'));
+  const headers = headerCells.map(cellText);
+  const ncols = headers.length;
+
+  const rows = Array.from(table.querySelectorAll('tbody tr')).map(tr => {
+    const row = new Array(ncols).fill('');
+    let col = 0;
+    for (const td of tr.querySelectorAll('td')) {
+      if (col >= ncols) break;
+      const span = parseInt(td.getAttribute('colspan') || '1', 10);
+      row[col] = cellText(td);
+      col += span;
+    }
+    return row;
+  });
+
+  const csv = [headers, ...rows]
+    .map(r => r.map(csvEscape).join(','))
+    .join('\n');
+
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  const filename = `cit_search_results_${yyyy}-${mm}-${dd}.csv`;
+
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 // ── Summary tab ────────────────────────────────────────────────────────────
